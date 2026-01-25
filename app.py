@@ -1,750 +1,1150 @@
 """
-XR Portal - Streamlit Edition (Standalone)
-Innovation with Care VR/AR
-
-Ολοκληρωμένο αρχείο για GitHub - περιλαμβάνει ΟΛΑ σε ένα αρχείο.
+VR School Library - Βιβλιοθήκη Εικονικής Πραγματικότητας
+Για μαθητές 15-18 ετών με smartphone + VR headset case
 
 Εκτέλεση:
-    pip install streamlit
-    streamlit run app.py
+    pip install streamlit qrcode pillow
+    streamlit run vr_library.py
 
-Demo Codes:
-    TEACHER-DEMO2024
-    STUDENT-DEMO2024
-    GIFT-DEMO2024
-
-Admin: http://localhost:8501/?admin=true
+Features:
+- Εκπαιδευτικό περιεχόμενο (Φυσική, Ιστορία, Βιολογία, Χημεία)
+- Χαλάρωση/Ψυχαγωγία (Φύση, Περιπέτειες, Χόμπι)
+- Mobile-responsive interface
+- QR codes για instant VR launch
+- Favorites & Search
+- Admin panel για προσθήκη περιεχομένου
 """
 import streamlit as st
 import sqlite3
-import secrets
+import io
+import base64
+from typing import Optional, List, Dict, Any
+from datetime import datetime
 from urllib.parse import quote
-import os
+
+try:
+    import qrcode
+    from PIL import Image
+    HAS_QR = True
+except ImportError:
+    HAS_QR = False
+
 
 # ============================================================================
-# SEED DATA (Ενσωματωμένα)
+# DATABASE SETUP
 # ============================================================================
 
-DEMO_CODES = [
-    ('TEACHER-DEMO2024', 'TEACHER'),
-    ('STUDENT-DEMO2024', 'STUDENT'),
-    ('GIFT-DEMO2024', 'GIFT'),
-]
+def init_db() -> None:
+    """Initialize SQLite database with schema."""
+    conn = sqlite3.connect('vr_library.db', check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    
+    # Experiences table
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS experiences (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            description TEXT,
+            category TEXT NOT NULL,
+            subcategory TEXT,
+            duration_min INTEGER,
+            difficulty TEXT,
+            youtube_url TEXT NOT NULL,
+            thumbnail_url TEXT,
+            learning_goals TEXT,
+            key_concepts TEXT,
+            discussion_questions TEXT,
+            safety_notes TEXT,
+            views_count INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
+    # Favorites table
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS favorites (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT NOT NULL,
+            experience_id INTEGER NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (experience_id) REFERENCES experiences(id),
+            UNIQUE(session_id, experience_id)
+        )
+    ''')
+    
+    # Seed data if empty
+    count = conn.execute('SELECT COUNT(*) as c FROM experiences').fetchone()[0]
+    if count == 0:
+        seed_data(conn)
+    
+    conn.commit()
+    conn.close()
 
-EXPERIENCES = [
-    # TEACHER (10)
-    ('teach01', 'ISS - Διαστημικός Σταθμός 360', 'Εξερεύνηση του Διεθνούς Διαστημικού Σταθμού', 'VR360', '10-16', 5, 
-     'Φυσική, Διάστημα', 'Κατανόηση ζωής στο διάστημα', '1. Πώς λειτουργεί η βαρύτητα;\n2. Τι τρώνε οι αστροναύτες;\n3. Πώς κοιμούνται;',
-     'Χωρίς έντονη κίνηση', 'Ήρεμο', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'TEACHER,STUDENT'),
+
+def seed_data(conn: sqlite3.Connection) -> None:
+    """Seed initial VR experiences."""
+    experiences = [
+        # ======== ΕΚΠΑΙΔΕΥΤΙΚΑ - ΦΥΣΙΚΗ ========
+        (
+            'Διαστημικός Σταθμός ISS 360°',
+            'Εξερεύνησε τον Διεθνή Διαστημικό Σταθμό και μάθε πώς ζουν οι αστροναύτες',
+            'Εκπαιδευτικό',
+            'Φυσική',
+            15,
+            'Εύκολο',
+            'https://www.youtube.com/watch?v=QvTmdIhYnes',
+            'https://img.youtube.com/vi/QvTmdIhYnes/maxresdefault.jpg',
+            'Κατανόηση ζωής σε συνθήκες μηδενικής βαρύτητας',
+            'Βαρύτητα, Όρμηση, Διαστημική Τεχνολογία',
+            '1. Πώς κινούνται οι αστροναύτες;\n2. Τι τρώνε και πώς;\n3. Πώς λειτουργεί η τουαλέτα;',
+            'Καθιστή θέση συνιστάται. Κανένα motion sickness.'
+        ),
+        (
+            'Πυρηνικός Αντιδραστήρας - Μέσα στο Ατομικό Εργοστάσιο',
+            'Δες από μέσα πώς λειτουργεί ένας πυρηνικός σταθμός',
+            'Εκπαιδευτικό',
+            'Φυσική',
+            12,
+            'Μέτριο',
+            'https://www.youtube.com/watch?v=tyDbq5HRs0o',
+            'https://img.youtube.com/vi/tyDbq5HRs0o/maxresdefault.jpg',
+            'Κατανόηση πυρηνικής ενέργειας και ασφάλειας',
+            'Σχάση, Ενέργεια, Ραδιενέργεια',
+            '1. Πώς παράγεται ενέργεια;\n2. Τι είναι η σχάση;\n3. Ποια μέτρα ασφαλείας;',
+            'Εκπαιδευτική προσομοίωση, όχι πραγματικός κίνδυνος'
+        ),
+        (
+            'Ηλιακό Σύστημα - Ταξίδι στους Πλανήτες',
+            'Πέταξε από πλανήτη σε πλανήτη και εξερεύνησε το σύστημά μας',
+            'Εκπαιδευτικό',
+            'Φυσική',
+            18,
+            'Εύκολο',
+            'https://www.youtube.com/watch?v=D8pnmwOXhoY',
+            'https://img.youtube.com/vi/D8pnmwOXhoY/maxresdefault.jpg',
+            'Γνωριμία με πλανήτες και τα χαρακτηριστικά τους',
+            'Πλανήτες, Τροχιές, Βαρύτητα',
+            '1. Ποιος πλανήτης είναι μεγαλύτερος;\n2. Γιατί ο Πλούτωνας δεν είναι πλανήτης;\n3. Τι είναι οι δακτύλιοι του Κρόνου;',
+            'Αργή κίνηση, κατάλληλο για όλους'
+        ),
+        
+        # ======== ΕΚΠΑΙΔΕΥΤΙΚΑ - ΙΣΤΟΡΙΑ ========
+        (
+            'Μάχη της Σαλαμίνας - Ναυμαχία 480 π.Χ.',
+            'Ζήσε την ιστορική ναυμαχία που άλλαξε την Ευρώπη',
+            'Εκπαιδευτικό',
+            'Ιστορία',
+            20,
+            'Μέτριο',
+            'https://www.youtube.com/watch?v=nWz5JVRobCg',
+            'https://img.youtube.com/vi/nWz5JVRobCg/maxresdefault.jpg',
+            'Κατανόηση στρατηγικής σημασίας της μάχης',
+            'Αρχαία Ελλάδα, Περσικοί Πόλεμοι, Ναυτική Στρατηγική',
+            '1. Ποιος ηγήθηκε των Ελλήνων;\n2. Γιατί νίκησαν;\n3. Τι συνέπειες είχε;',
+            'Ήρεμη παρακολούθηση, χωρίς βία'
+        ),
+        (
+            'Ακρόπολη Αθηνών - Εικονική Περιήγηση',
+            'Περπάτησε στην αρχαία Ακρόπολη και δες τον Παρθενώνα',
+            'Εκπαιδευτικό',
+            'Ιστορία',
+            15,
+            'Εύκολο',
+            'https://www.youtube.com/watch?v=VUiTp8oTzWM',
+            'https://img.youtube.com/vi/VUiTp8oTzWM/maxresdefault.jpg',
+            'Εκτίμηση αρχαίας αρχιτεκτονικής',
+            'Κλασική Αθήνα, Αρχιτεκτονική, Γλυπτική',
+            '1. Πότε χτίστηκε;\n2. Ποιος θεός τιμούνταν;\n3. Τι υλικό χρησιμοποιήθηκε;',
+            'Στατική θέαση, χωρίς κίνηση'
+        ),
+        (
+            'Β\' Παγκόσμιος Πόλεμος - Απόβαση στη Νορμανδία',
+            'Βίωσε την ιστορική ημέρα D-Day από κοντά',
+            'Εκπαιδευτικό',
+            'Ιστορία',
+            25,
+            'Δύσκολο',
+            'https://www.youtube.com/watch?v=EGW0R2rgeVI',
+            'https://img.youtube.com/vi/EGW0R2rgeVI/maxresdefault.jpg',
+            'Κατανόηση μεγαλύτερης στρατιωτικής επιχείρησης',
+            'Β\' ΠΠ, Σύμμαχοι, Στρατηγική',
+            '1. Πότε έγινε η απόβαση;\n2. Πόσες χώρες συμμετείχαν;\n3. Γιατί ήταν κρίσιμη;',
+            'Περιέχει ιστορικό υλικό πολέμου. Προαιρετική θέαση.'
+        ),
+        
+        # ======== ΕΚΠΑΙΔΕΥΤΙΚΑ - ΒΙΟΛΟΓΙΑ ========
+        (
+            'Ανθρώπινη Καρδιά - Μέσα στο Κυκλοφορικό',
+            'Εξερεύνησε την καρδιά και τα αιμοφόρα αγγεία',
+            'Εκπαιδευτικό',
+            'Βιολογία',
+            12,
+            'Εύκολο',
+            'https://www.youtube.com/watch?v=gcgBhIz5MKU',
+            'https://img.youtube.com/vi/gcgBhIz5MKU/maxresdefault.jpg',
+            'Κατανόηση λειτουργίας κυκλοφορικού συστήματος',
+            'Καρδιά, Αίμα, Κυκλοφορικό',
+            '1. Πόσες κοιλίες έχει η καρδιά;\n2. Πώς κυκλοφορεί το αίμα;\n3. Τι κάνουν οι βαλβίδες;',
+            'Εκπαιδευτική animation, όχι πραγματικό όργανο'
+        ),
+        (
+            'Κύτταρο & DNA - Μοριακή Βιολογία',
+            'Ταξίδεψε μέσα στο κύτταρο και δες το DNA',
+            'Εκπαιδευτικό',
+            'Βιολογία',
+            16,
+            'Μέτριο',
+            'https://www.youtube.com/watch?v=yqESR7E4b_8',
+            'https://img.youtube.com/vi/yqESR7E4b_8/maxresdefault.jpg',
+            'Κατανόηση δομής DNA και κυττάρου',
+            'DNA, Χρωμοσώματα, Πυρήνας',
+            '1. Τι είναι το DNA;\n2. Πώς αντιγράφεται;\n3. Τι ρόλο έχουν τα ριβοσώματα;',
+            '3D animation, ήρεμη προσέγγιση'
+        ),
+        (
+            'Υποβρύχιος Κόσμος - Κοραλλιογενής Ύφαλος',
+            'Κατάδυση στον κοραλλιογενή ύφαλο και τη θαλάσσια ζωή',
+            'Εκπαιδευτικό',
+            'Βιολογία',
+            20,
+            'Εύκολο',
+            'https://www.youtube.com/watch?v=BaoHJN4SG7w',
+            'https://img.youtube.com/vi/BaoHJN4SG7w/maxresdefault.jpg',
+            'Εκτίμηση θαλάσσιας βιοποικιλότητας',
+            'Οικοσυστήματα, Θαλάσσια Ζωή, Κοράλλια',
+            '1. Τι είναι κοράλλι;\n2. Ποια ζώα είδες;\n3. Γιατί απειλούνται;',
+            'Ήρεμη κολύμβηση, χωρίς έντονη κίνηση'
+        ),
+        
+        # ======== ΕΚΠΑΙΔΕΥΤΙΚΑ - ΧΗΜΕΙΑ ========
+        (
+            'Περιοδικός Πίνακας - Τα Στοιχεία σε 3D',
+            'Εξερεύνησε τα χημικά στοιχεία διαδραστικά',
+            'Εκπαιδευτικό',
+            'Χημεία',
+            14,
+            'Μέτριο',
+            'https://www.youtube.com/watch?v=qm0IfG1GyZU',
+            'https://img.youtube.com/vi/qm0IfG1GyZU/maxresdefault.jpg',
+            'Κατανόηση δομής περιοδικού πίνακα',
+            'Άτομα, Ηλεκτρόνια, Περίοδοι',
+            '1. Τι είναι άτομο;\n2. Πώς οργανώνονται τα στοιχεία;\n3. Ποιο το πιο κοινό;',
+            'Στατική παρουσίαση'
+        ),
+        
+        # ======== ΧΑΛΑΡΩΣΗ - ΦΥΣΗ ========
+        (
+            'Ήρεμη Παραλία - Ηλιοβασίλεμα στα Κύματα',
+            'Χαλάρωσε δίπλα στη θάλασσα με τον ήχο των κυμάτων',
+            'Χαλάρωση',
+            'Φύση',
+            30,
+            'Εύκολο',
+            'https://www.youtube.com/watch?v=V1bFr2SWP1I',
+            'https://img.youtube.com/vi/V1bFr2SWP1I/maxresdefault.jpg',
+            'Μείωση άγχους, ηρεμία',
+            'Mindfulness, Διαλογισμός, Χαλάρωση',
+            '',
+            'Ιδανικό για διάλειμμα. Καθιστή θέση.'
+        ),
+        (
+            'Βουνό - Κορυφή Έβερεστ Sunrise',
+            'Απόλαυσε την ανατολή από την κορυφή του κόσμου',
+            'Χαλάρωση',
+            'Φύση',
+            25,
+            'Μέτριο',
+            'https://www.youtube.com/watch?v=oHg5SJYRHA0',
+            'https://img.youtube.com/vi/oHg5SJYRHA0/maxresdefault.jpg',
+            'Αίσθημα επιτυχίας, ηρεμία',
+            'Φύση, Βουνά, Ύψος',
+            '',
+            'Όχι για ακροφοβία. Ύψη απεικονίζονται.'
+        ),
+        (
+            'Δάσος Φθινοπώρου - Περίπατος στη Φύση',
+            'Περπάτησε σε ένα ήρεμο δάσος γεμάτο χρώματα',
+            'Χαλάρωση',
+            'Φύση',
+            20,
+            'Εύκολο',
+            'https://www.youtube.com/watch?v=d0tU18Ybcvk',
+            'https://img.youtube.com/vi/d0tU18Ybcvk/maxresdefault.jpg',
+            'Σύνδεση με φύση, ηρεμία',
+            'Φύση, Δάσος, Εποχές',
+            '',
+            'Αργή κίνηση, ιδανικό για όλους'
+        ),
+        (
+            'Βόρειο Σέλας - Φινλανδία Night Sky',
+            'Παρακολούθησε το μαγικό φαινόμενο του σέλας',
+            'Χαλάρωση',
+            'Φύση',
+            18,
+            'Εύκολο',
+            'https://www.youtube.com/watch?v=nT7K3bRMjos',
+            'https://img.youtube.com/vi/nT7K3bRMjos/maxresdefault.jpg',
+            'Θαυμασμός φυσικού φαινομένου',
+            'Μαγνητικό Πεδίο, Ατμόσφαιρα',
+            '',
+            'Στατική θέαση, χωρίς κίνηση'
+        ),
+        
+        # ======== ΧΑΛΑΡΩΣΗ - ΠΕΡΙΠΕΤΕΙΕΣ ========
+        (
+            'Ζούγλα Αμαζονίου - Εξερεύνηση Βροχόδασους',
+            'Περπάτησε στην πιο πυκνή ζούγλα του κόσμου',
+            'Χαλάρωση',
+            'Περιπέτειες',
+            22,
+            'Μέτριο',
+            'https://www.youtube.com/watch?v=kXfvN4JaWGY',
+            'https://img.youtube.com/vi/kXfvN4JaWGY/maxresdefault.jpg',
+            'Σύνδεση με άγρια φύση',
+            'Ζούγλα, Βιοποικιλότητα, Περιπέτεια',
+            '',
+            'Ήρεμη εξερεύνηση, όχι επικίνδυνα ζώα'
+        ),
+        (
+            'Αναρρίχηση - Yosemite Rock Climbing',
+            'Σκαρφάλωσε σε κάθετο βράχο (ασφαλής προσομοίωση)',
+            'Χαλάρωση',
+            'Περιπέτειες',
+            15,
+            'Δύσκολο',
+            'https://www.youtube.com/watch?v=Cyya23MPoAI',
+            'https://img.youtube.com/vi/Cyya23MPoAI/maxresdefault.jpg',
+            'Ενίσχυση αυτοπεποίθησης',
+            'Αθλητισμός, Ύψος, Δύναμη',
+            '',
+            'ΟΧΙ για ακροφοβία. Έντονη κατακόρυφη κίνηση.'
+        ),
+        (
+            'Safari Αφρική - Λιοντάρια & Ελέφαντες',
+            'Πλησίασε άγρια ζώα από απόσταση ασφαλείας',
+            'Χαλάρωση',
+            'Περιπέτειες',
+            25,
+            'Εύκολο',
+            'https://www.youtube.com/watch?v=gpJHZzlTiAw',
+            'https://img.youtube.com/vi/gpJHZzlTiAw/maxresdefault.jpg',
+            'Γνωριμία με άγρια πανίδα',
+            'Ζώα, Σαβάνα, Αφρική',
+            '',
+            'Ήρεμη παρατήρηση από safari jeep'
+        ),
+        
+        # ======== ΧΑΛΑΡΩΣΗ - ΧΟΜΠΙ ========
+        (
+            'Ποδόσφαιρο - Camp Nou Stadium Tour',
+            'Επισκέψου το θρυλικό γήπεδο της Μπαρτσελόνα',
+            'Χαλάρωση',
+            'Χόμπι',
+            18,
+            'Εύκολο',
+            'https://www.youtube.com/watch?v=lJLIbg_tB4Q',
+            'https://img.youtube.com/vi/lJLIbg_tB4Q/maxresdefault.jpg',
+            'Σύνδεση με αγαπημένο άθλημα',
+            'Ποδόσφαιρο, Γήπεδα, Αθλητισμός',
+            '',
+            'Στατική περιήγηση γηπέδου'
+        ),
+        (
+            'Μουσική - Virtual Concert Philharmonic',
+            'Ακούσε συμφωνική ορχήστρα από την πρώτη σειρά',
+            'Χαλάρωση',
+            'Χόμπι',
+            30,
+            'Εύκολο',
+            'https://www.youtube.com/watch?v=Zi8vJ_lMxQI',
+            'https://img.youtube.com/vi/Zi8vJ_lMxQI/maxresdefault.jpg',
+            'Εκτίμηση κλασικής μουσικής',
+            'Μουσική, Ορχήστρα, Πολιτισμός',
+            '',
+            'Καθιστή ακρόαση, χρειάζεται ακουστικά'
+        ),
+        (
+            'Διάστημα - Περίπατος Αστροναύτη (Spacewalk)',
+            'Κάνε spacewalk έξω από το ISS',
+            'Χαλάρωση',
+            'Χόμπι',
+            20,
+            'Μέτριο',
+            'https://www.youtube.com/watch?v=KaOC9danxNo',
+            'https://img.youtube.com/vi/KaOC9danxNo/maxresdefault.jpg',
+            'Εμπειρία μηδενικής βαρύτητας',
+            'Διάστημα, Τεχνολογία, Αστροναύτες',
+            '',
+            'Αργή κίνηση, μπορεί να προκαλέσει ίλιγγο'
+        ),
+    ]
     
-    ('teach02', 'Ανθρώπινο Σώμα - Καρδιά VR', 'Εξερεύνηση καρδιάς και κυκλοφορικού', 'VR360', '12-16', 6,
-     'Βιολογία, Ανατομία', 'Κατανόηση λειτουργίας καρδιάς', '1. Πόσες κοιλίες έχει;\n2. Πώς κυκλοφορεί το αίμα;\n3. Τι είναι οι βαλβίδες;',
-     'Ήρεμη παρουσίαση', 'Ήρεμο', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'TEACHER,STUDENT'),
+    conn.executemany('''
+        INSERT INTO experiences 
+        (title, description, category, subcategory, duration_min, difficulty, 
+         youtube_url, thumbnail_url, learning_goals, key_concepts, 
+         discussion_questions, safety_notes)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', experiences)
+
+
+def get_db() -> sqlite3.Connection:
+    """Get database connection."""
+    conn = sqlite3.connect('vr_library.db', check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+# ============================================================================
+# QR CODE GENERATION
+# ============================================================================
+
+def generate_qr_code(url: str) -> Optional[str]:
+    """Generate QR code and return base64 image."""
+    if not HAS_QR:
+        return None
     
-    ('teach03', 'Πυραμίδες Αιγύπτου AR', 'Αρχιτεκτονική και κατασκευή πυραμίδων', 'AR', '10-18', 7,
-     'Ιστορία, Αρχαιολογία', 'Κατασκευή πυραμίδων', '1. Πώς κατασκευάστηκαν;\n2. Πόσο χρόνο πήρε;\n3. Τι ρόλο είχαν;',
-     'Απαιτεί χώρο', 'Μέτριο', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'TEACHER'),
-    
-    ('teach04', 'Ηλιακό Σύστημα VR', 'Ταξίδι στους πλανήτες', 'VR360', '8-14', 6,
-     'Φυσική, Αστρονομία', 'Γνωριμία με πλανήτες', '1. Ποιος είναι ο μεγαλύτερος;\n2. Πόσοι είναι;\n3. Γιατί ο Πλούτωνας δεν είναι πλανήτης;',
-     'Αργή κίνηση', 'Ήρεμο', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'TEACHER,STUDENT,GIFT'),
-    
-    ('teach05', 'Φωτοσύνθεση AR', 'Πώς τα φυτά παράγουν οξυγόνο', 'AR', '10-14', 5,
-     'Βιολογία, Φυτά', 'Κατανόηση φωτοσύνθεσης', '1. Τι χρειάζονται τα φυτά;\n2. Τι παράγουν;\n3. Γιατί είναι σημαντική;',
-     'Στατική', 'Ήρεμο', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'TEACHER,STUDENT'),
-    
-    ('teach06', 'Μεγάλο Τείχος Κίνας 360', 'Ιστορική περιήγηση', 'VR360', '12-18', 6,
-     'Ιστορία', 'Ιστορία τείχους', '1. Πόσο μακρύ;\n2. Πότε χτίστηκε;\n3. Γιατί το έφτιαξαν;',
-     'Ύψος - όχι ακροφοβία', 'Μέτριο', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'TEACHER,GIFT'),
-    
-    ('teach07', 'Ηφαίστειο VR', 'Εσωτερικό Γης', 'VR360', '11-16', 7,
-     'Γεωλογία', 'Ηφαιστειακή δραστηριότητα', '1. Τι είναι το μάγμα;\n2. Πώς εκρήγνυται;\n3. Τι στρώματα έχει η Γη;',
-     'Έντονες εικόνες', 'Μέτριο', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'TEACHER,STUDENT'),
-    
-    ('teach08', 'DNA & Κύτταρο AR', 'Μέσα στο κύτταρο', 'AR', '14-18', 6,
-     'Βιολογία, Γενετική', 'Δομή DNA', '1. Τι είναι το DNA;\n2. Πώς λειτουργεί το κύτταρο;\n3. Τι είναι χρωμοσώματα;',
-     'Στατική 3D', 'Ήρεμο', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'TEACHER'),
-    
-    ('teach09', 'Αρχαία Ολυμπία VR', 'Αναπαράσταση Ολυμπίας', 'VR360', '10-16', 7,
-     'Ιστορία', 'Ολυμπιακοί Αγώνες', '1. Τι αγωνίσματα;\n2. Ποιοι συμμετείχαν;\n3. Γιατί σταμάτησαν;',
-     'Ήρεμη περιήγηση', 'Ήρεμο', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'TEACHER,STUDENT'),
-    
-    ('teach10', 'Κύκλος Νερού 360', 'Υδρολογικός κύκλος', 'VR360', '8-12', 5,
-     'Γεωγραφία', 'Κύκλος νερού', '1. Πώς εξατμίζεται;\n2. Τι είναι τα σύννεφα;\n3. Πώς βρέχει;',
-     'Χωρίς κίνηση', 'Ήρεμο', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'TEACHER,STUDENT,GIFT'),
-    
-    # STUDENT (10)
-    ('stud01', 'Υποβρύχιος Κόσμος VR', 'Βουτιά στον ωκεανό', 'VR360', '8-14', 7,
-     'Βιολογία, Θαλάσσια Ζωή', 'Θαλάσσιοι οργανισμοί', '1. Ποια ζώα είδες;\n2. Σε τι βάθος;\n3. Τι τρώνε;',
-     'Ήρεμη κολύμβηση', 'Ήρεμο', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'STUDENT,GIFT'),
-    
-    ('stud02', 'Δεινόσαυροι AR', 'Δεινόσαυροι ζωντανεύουν', 'AR', '7-13', 6,
-     'Παλαιοντολογία', 'Εποχή δεινοσαύρων', '1. Πόσο μεγάλοι;\n2. Τι έτρωγαν;\n3. Πότε έζησαν;',
-     'Χρειάζεται χώρος', 'Μέτριο', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'STUDENT,GIFT'),
-    
-    ('stud03', 'Τροπικό Δάσος 360', 'Εξερεύνηση Αμαζονίου', 'VR360', '9-15', 6,
-     'Βιολογία, Οικολογία', 'Βιοποικιλότητα', '1. Τι ζώα ζουν;\n2. Γιατί σημαντικό;\n3. Τι κίνδυνοι;',
-     'Ήρεμη', 'Ήρεμο', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'STUDENT,GIFT'),
-    
-    ('stud04', 'Λούβρο VR', 'Εικονική περιήγηση', 'VR360', '12-18', 7,
-     'Τέχνη, Ιστορία', 'Διάσημα έργα', '1. Ποιος έφτιαξε Μόνα Λίζα;\n2. Πόσο παλιά;\n3. Τι άλλο είδες;',
-     'Στατική', 'Ήρεμο', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'STUDENT,GIFT'),
-    
-    ('stud05', 'Ανανεώσιμες Πηγές AR', 'Ηλιακά & ανεμογεννήτριες', 'AR', '11-16', 6,
-     'Φυσική, Περιβάλλον', 'Ανανεώσιμες πηγές', '1. Πώς λειτουργούν ηλιακά;\n2. Τι είναι αιολική;\n3. Γιατί σημαντικές;',
-     'Στατική', 'Ήρεμο', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'STUDENT'),
-    
-    ('stud06', 'Αρχαία Ρώμη VR', 'Ταξίδι στην Ρώμη', 'VR360', '12-18', 7,
-     'Ιστορία', 'Ρωμαϊκός πολιτισμός', '1. Πώς ζούσαν;\n2. Τι έτρωγαν;\n3. Πώς ντύνονταν;',
-     'Ήρεμη', 'Ήρεμο', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'STUDENT,GIFT'),
-    
-    ('stud07', 'Μέλισσες AR', 'Ρόλος μελισσών', 'AR', '8-13', 5,
-     'Βιολογία', 'Επικονίαση', '1. Τι είναι επικονίαση;\n2. Τι κάνουν μέλισσες;\n3. Γιατί σημαντικές;',
-     'Χωρίς κίνηση', 'Ήρεμο', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'STUDENT,GIFT'),
-    
-    ('stud08', 'Βόρειο Σέλας 360', 'Παρακολούθηση σέλας', 'VR360', '10-18', 6,
-     'Φυσική', 'Φαινόμενο σέλας', '1. Πώς δημιουργείται;\n2. Πού βλέπουμε;\n3. Πότε εμφανίζεται;',
-     'Ήρεμη', 'Ήρεμο', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'STUDENT,GIFT'),
-    
-    ('stud09', 'Μουσικά Όργανα AR', 'Πώς λειτουργούν όργανα', 'AR', '7-14', 6,
-     'Μουσική', 'Παραγωγή ήχου', '1. Πώς βγαίνει ήχος;\n2. Τι είναι χορδές;\n3. Ποια σου άρεσαν;',
-     'Στατική', 'Ήρεμο', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'STUDENT,GIFT'),
-    
-    ('stud10', 'Μαγνητικό Πεδίο VR', 'Πεδίο Γης', 'VR360', '12-16', 6,
-     'Φυσική', 'Μαγνητικό πεδίο', '1. Τι είναι;\n2. Πώς προστατεύει;\n3. Σχέση με πυξίδα;',
-     'Χωρίς κίνηση', 'Ήρεμο', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'STUDENT'),
-    
-    # GIFT (10)
-    ('gift01', 'Ζώα Σαβάνας 360', 'Safari Αφρική', 'VR360', '6-14', 7,
-     'Ζωολογία', 'Άγρια ζώα', '1. Ποια ζώα;\n2. Πού ζουν;\n3. Τι τρώνε;',
-     'Ήρεμη', 'Ήρεμο', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'GIFT'),
-    
-    ('gift02', 'Πεταλούδες AR', 'Πεταλούδες σπίτι', 'AR', '5-12', 5,
-     'Βιολογία', 'Μεταμόρφωση', '1. Πώς γίνεται πεταλούδα;\n2. Τι τρώει κάμπια;\n3. Πόσο ζει;',
-     'Ήρεμη', 'Ήρεμο', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'GIFT'),
-    
-    ('gift03', 'Κάστρα VR', 'Μεσαιωνικό κάστρο', 'VR360', '8-15', 7,
-     'Ιστορία', 'Μεσαιωνική ζωή', '1. Πώς ζούσαν;\n2. Τι έτρωγαν;\n3. Πώς ήταν κάστρα;',
-     'Στατική', 'Ήρεμο', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'GIFT'),
-    
-    ('gift04', 'Πλανητάριο 360', 'Αστέρια & αστερισμοί', 'VR360', '7-18', 6,
-     'Αστρονομία', 'Αστερισμοί', '1. Τι είναι;\n2. Πώς βρίσκουμε Πολική;\n3. Τι είναι Γαλαξίας;',
-     'Χωρίς κίνηση', 'Ήρεμο', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'GIFT'),
-    
-    ('gift05', 'Κήπος Φαντασίας AR', 'Μαγικός κήπος', 'AR', '5-11', 6,
-     'Τέχνη', 'Δημιουργικότητα', '1. Τι έφτιαξες;\n2. Τι χρώματα;\n3. Τι άρεσε;',
-     'Απαιτεί χώρο', 'Μέτριο', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'GIFT'),
-    
-    ('gift06', 'Χριστουγεννιάτικο Χωριό VR', 'Χιονισμένο χωριό', 'VR360', '4-12', 6,
-     'Πολιτισμός', 'Χριστούγεννα', '1. Τι είδες;\n2. Τι κάνουν;\n3. Τι άρεσε;',
-     'Ήρεμη', 'Ήρεμο', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'GIFT'),
-    
-    ('gift07', 'Ζωολογικός Κήπος 360', 'Επίσκεψη zoo', 'VR360', '5-13', 7,
-     'Ζωολογία', 'Ζώα όλου κόσμου', '1. Ποιο άρεσε;\n2. Από πού;\n3. Τι τρώνε;',
-     'Χωρίς έντονη κίνηση', 'Ήρεμο', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'GIFT'),
-    
-    ('gift08', 'Παγοδρόμιο AR', 'Χόκεϊ σπίτι', 'AR', '8-16', 7,
-     'Αθλητισμός', 'Χόκεϊ επί πάγου', '1. Πόσοι παίκτες;\n2. Ποιος στόχος;\n3. Τι εξοπλισμός;',
-     'Χώρος για κίνηση', 'Έντονο', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'GIFT'),
-    
-    ('gift09', 'Παραμύθι Δάσους VR', 'Διαδραστικό παραμύθι', 'VR360', '4-10', 6,
-     'Λογοτεχνία', 'Αφηγηματική εμπειρία', '1. Τι έγινε;\n2. Ποιος ήρωας;\n3. Πώς τελείωσε;',
-     'Ήρεμη', 'Ήρεμο', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'GIFT'),
-    
-    ('gift10', 'Πειραματισμοί AR', 'Απλά πειράματα', 'AR', '9-14', 6,
-     'Φυσική', 'Αρχές φυσικής', '1. Τι παρατήρησες;\n2. Πώς βαρύτητα;\n3. Τι άλλο;',
-     'Στατικά', 'Ήρεμο', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'GIFT'),
-]
+    try:
+        qr = qrcode.QRCode(version=1, box_size=10, border=2)
+        qr.add_data(url)
+        qr.make(fit=True)
+        
+        img = qr.make_image(fill_color="black", back_color="white")
+        
+        buf = io.BytesIO()
+        img.save(buf, format='PNG')
+        buf.seek(0)
+        
+        img_base64 = base64.b64encode(buf.read()).decode()
+        return f"data:image/png;base64,{img_base64}"
+    except Exception:
+        return None
+
+
+# ============================================================================
+# SESSION STATE INIT
+# ============================================================================
+
+if 'session_id' not in st.session_state:
+    st.session_state.session_id = base64.b64encode(
+        datetime.now().isoformat().encode()
+    ).decode()[:16]
+
+if 'current_view' not in st.session_state:
+    st.session_state.current_view = 'library'
+
+if 'selected_exp_id' not in st.session_state:
+    st.session_state.selected_exp_id = None
+
 
 # ============================================================================
 # PAGE CONFIG
 # ============================================================================
 
 st.set_page_config(
-    page_title="XR Portal - Innovation with Care",
-    page_icon="🌐",
+    page_title="VR School Library 📚",
+    page_icon="🥽",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
 
-# ============================================================================
-# DATABASE
-# ============================================================================
-
-DB_PATH = 'xr_portal.db'
-
-
-def get_db():
-    """Σύνδεση στη DB."""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-
-def init_db():
-    """Δημιουργία πινάκων."""
-    conn = get_db()
-    conn.executescript('''
-        CREATE TABLE IF NOT EXISTS access_codes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            code TEXT UNIQUE NOT NULL,
-            package_type TEXT NOT NULL,
-            expires_at TEXT,
-            max_uses INTEGER DEFAULT -1,
-            current_uses INTEGER DEFAULT 0,
-            status TEXT DEFAULT 'active',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-        
-        CREATE TABLE IF NOT EXISTS experiences (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            short_code TEXT UNIQUE NOT NULL,
-            title TEXT NOT NULL,
-            description TEXT,
-            type TEXT DEFAULT 'VR360',
-            age_range TEXT DEFAULT '8-14',
-            duration_min INTEGER DEFAULT 5,
-            subjects TEXT,
-            learning_goal TEXT,
-            questions TEXT,
-            safety_note TEXT,
-            motion_level TEXT DEFAULT 'Ήρεμο',
-            target_url TEXT NOT NULL,
-            package_types TEXT DEFAULT 'TEACHER,STUDENT,GIFT',
-            opens_count INTEGER DEFAULT 0,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-        
-        CREATE TABLE IF NOT EXISTS user_favorites (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            session_id TEXT NOT NULL,
-            experience_id INTEGER NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (experience_id) REFERENCES experiences(id)
-        );
-        
-        CREATE INDEX IF NOT EXISTS idx_codes ON access_codes(code);
-        CREATE INDEX IF NOT EXISTS idx_short_code ON experiences(short_code);
-        CREATE INDEX IF NOT EXISTS idx_favorites ON user_favorites(session_id);
-    ''')
-    conn.commit()
-    conn.close()
-
-
-def seed_data():
-    """Seed με demo data."""
-    conn = get_db()
-    
-    # Codes
-    for code, pkg_type in DEMO_CODES:
-        conn.execute(
-            'INSERT OR IGNORE INTO access_codes (code, package_type) VALUES (?, ?)',
-            (code, pkg_type)
-        )
-    
-    # Experiences
-    for exp in EXPERIENCES:
-        conn.execute('''
-            INSERT OR IGNORE INTO experiences 
-            (short_code, title, description, type, age_range, duration_min, subjects, 
-             learning_goal, questions, safety_note, motion_level, target_url, package_types)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', exp)
-    
-    conn.commit()
-    conn.close()
-
-
-# ============================================================================
-# SESSION STATE
-# ============================================================================
-
-if 'initialized' not in st.session_state:
-    st.session_state.initialized = True
-    st.session_state.logged_in = False
-    st.session_state.package_type = None
-    st.session_state.access_code = None
-    st.session_state.session_id = secrets.token_hex(16)
-    st.session_state.current_page = 'landing'
-    st.session_state.selected_experience = None
-    
-    # Initialize DB
-    if not os.path.exists(DB_PATH):
-        init_db()
-        seed_data()
-
-
-# ============================================================================
-# CSS
-# ============================================================================
-
+# Custom CSS for mobile-responsive design
 st.markdown("""
 <style>
-    .main {padding: 2rem;}
-    .stButton>button {
-        width: 100%;
-        background: #4F46E5;
+    .main-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 2rem;
+        border-radius: 10px;
+        margin-bottom: 2rem;
+        text-align: center;
         color: white;
-        padding: 0.75rem 1.5rem;
-        border-radius: 8px;
-        border: none;
-        font-weight: 600;
     }
-    .stButton>button:hover {background: #3730A3;}
-    .motion-badge {
+    .exp-card {
+        background: white;
+        border: 1px solid #e0e0e0;
+        border-radius: 10px;
+        padding: 1.5rem;
+        margin-bottom: 1rem;
+        transition: transform 0.2s;
+    }
+    .exp-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    .category-badge {
         display: inline-block;
         padding: 0.25rem 0.75rem;
-        border-radius: 20px;
+        border-radius: 15px;
         font-size: 0.85rem;
-        font-weight: 600;
-        margin-left: 0.5rem;
+        font-weight: bold;
+        margin-right: 0.5rem;
     }
-    .motion-hremo {background: #D1FAE5; color: #065F46;}
-    .motion-metrio {background: #FEF3C7; color: #92400E;}
-    .motion-entono {background: #FEE2E2; color: #991B1B;}
-    .hero {text-align: center; padding: 3rem 0;}
-    .hero h1 {font-size: 3rem; margin-bottom: 0.5rem;}
-    .tagline {font-size: 1.5rem; color: #4F46E5; font-weight: 600;}
-    .package-badge {background: #10B981; color: white; padding: 0.5rem 1rem; border-radius: 20px; font-weight: 600;}
+    .educational {
+        background: #e3f2fd;
+        color: #1976d2;
+    }
+    .relaxation {
+        background: #f3e5f5;
+        color: #7b1fa2;
+    }
+    .qr-container {
+        text-align: center;
+        padding: 1rem;
+        background: #f5f5f5;
+        border-radius: 10px;
+    }
+    @media (max-width: 768px) {
+        .main-header {
+            padding: 1rem;
+        }
+        .exp-card {
+            padding: 1rem;
+        }
+    }
 </style>
 """, unsafe_allow_html=True)
+
+
+# ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
+
+def get_all_experiences(
+    category: Optional[str] = None,
+    subcategory: Optional[str] = None,
+    difficulty: Optional[str] = None,
+    search: Optional[str] = None
+) -> List[Dict[str, Any]]:
+    """Get experiences with filters."""
+    conn = get_db()
+    
+    query = 'SELECT * FROM experiences WHERE 1=1'
+    params = []
+    
+    if category and category != 'Όλα':
+        query += ' AND category = ?'
+        params.append(category)
+    
+    if subcategory and subcategory != 'Όλα':
+        query += ' AND subcategory = ?'
+        params.append(subcategory)
+    
+    if difficulty and difficulty != 'Όλα':
+        query += ' AND difficulty = ?'
+        params.append(difficulty)
+    
+    if search:
+        query += ' AND (title LIKE ? OR description LIKE ? OR key_concepts LIKE ?)'
+        search_term = f'%{search}%'
+        params.extend([search_term, search_term, search_term])
+    
+    query += ' ORDER BY views_count DESC, title ASC'
+    
+    rows = conn.execute(query, params).fetchall()
+    conn.close()
+    
+    return [dict(row) for row in rows]
+
+
+def get_experience_by_id(exp_id: int) -> Optional[Dict[str, Any]]:
+    """Get single experience by ID."""
+    conn = get_db()
+    row = conn.execute('SELECT * FROM experiences WHERE id = ?', (exp_id,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def increment_views(exp_id: int) -> None:
+    """Increment view count."""
+    conn = get_db()
+    conn.execute(
+        'UPDATE experiences SET views_count = views_count + 1 WHERE id = ?',
+        (exp_id,)
+    )
+    conn.commit()
+    conn.close()
+
+
+def is_favorite(session_id: str, exp_id: int) -> bool:
+    """Check if experience is favorited."""
+    conn = get_db()
+    result = conn.execute(
+        'SELECT 1 FROM favorites WHERE session_id = ? AND experience_id = ?',
+        (session_id, exp_id)
+    ).fetchone()
+    conn.close()
+    return result is not None
+
+
+def toggle_favorite(session_id: str, exp_id: int) -> bool:
+    """Toggle favorite status. Returns new state (True = favorited)."""
+    conn = get_db()
+    
+    if is_favorite(session_id, exp_id):
+        conn.execute(
+            'DELETE FROM favorites WHERE session_id = ? AND experience_id = ?',
+            (session_id, exp_id)
+        )
+        conn.commit()
+        conn.close()
+        return False
+    else:
+        conn.execute(
+            'INSERT INTO favorites (session_id, experience_id) VALUES (?, ?)',
+            (session_id, exp_id)
+        )
+        conn.commit()
+        conn.close()
+        return True
+
+
+def get_favorites(session_id: str) -> List[Dict[str, Any]]:
+    """Get all favorites for session."""
+    conn = get_db()
+    rows = conn.execute('''
+        SELECT e.* FROM experiences e
+        JOIN favorites f ON e.id = f.experience_id
+        WHERE f.session_id = ?
+        ORDER BY f.created_at DESC
+    ''', (session_id,)).fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+
+# ============================================================================
+# UI COMPONENTS
+# ============================================================================
+
+def render_header() -> None:
+    """Render main header."""
+    st.markdown("""
+    <div class="main-header">
+        <h1>🥽 VR School Library</h1>
+        <p>Βιβλιοθήκη Εικονικής Πραγματικότητας για Μαθητές 15-18 ετών</p>
+        <p style="font-size: 0.9rem; opacity: 0.9;">
+            Χρησιμοποίησε το smartphone σου + VR headset case για μοναδικές εμπειρίες!
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+def render_navigation() -> None:
+    """Render navigation buttons."""
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        if st.button("📚 Βιβλιοθήκη", use_container_width=True):
+            st.session_state.current_view = 'library'
+            st.rerun()
+    
+    with col2:
+        if st.button("⭐ Αγαπημένα", use_container_width=True):
+            st.session_state.current_view = 'favorites'
+            st.rerun()
+    
+    with col3:
+        if st.button("ℹ️ Οδηγίες", use_container_width=True):
+            st.session_state.current_view = 'help'
+            st.rerun()
+    
+    with col4:
+        if st.button("🔧 Admin", use_container_width=True):
+            st.session_state.current_view = 'admin'
+            st.rerun()
+
+
+def render_experience_card(exp: Dict[str, Any], show_details_btn: bool = True) -> None:
+    """Render experience card."""
+    category_class = 'educational' if exp['category'] == 'Εκπαιδευτικό' else 'relaxation'
+    
+    st.markdown(f"""
+    <div class="exp-card">
+        <span class="category-badge {category_class}">{exp['category']}</span>
+        <span class="category-badge" style="background: #fff3e0; color: #e65100;">
+            {exp['subcategory']}
+        </span>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    col1, col2 = st.columns([3, 1])
+    
+    with col1:
+        st.markdown(f"### {exp['title']}")
+        st.write(exp['description'])
+        st.caption(f"⏱️ {exp['duration_min']} λεπτά | 🎯 {exp['difficulty']} | 👁️ {exp['views_count']} προβολές")
+    
+    with col2:
+        if exp['thumbnail_url']:
+            st.image(exp['thumbnail_url'], use_container_width=True)
+    
+    if show_details_btn:
+        col_btn1, col_btn2 = st.columns(2)
+        
+        with col_btn1:
+            if st.button("📖 Λεπτομέρειες", key=f"details_{exp['id']}", use_container_width=True):
+                st.session_state.selected_exp_id = exp['id']
+                st.session_state.current_view = 'experience'
+                st.rerun()
+        
+        with col_btn2:
+            is_fav = is_favorite(st.session_state.session_id, exp['id'])
+            fav_icon = "⭐" if is_fav else "☆"
+            if st.button(f"{fav_icon} Αγαπημένο", key=f"fav_{exp['id']}", use_container_width=True):
+                toggle_favorite(st.session_state.session_id, exp['id'])
+                st.rerun()
 
 
 # ============================================================================
 # PAGES
 # ============================================================================
 
-def landing_page():
-    """Landing page."""
-    st.markdown('<div class="hero">', unsafe_allow_html=True)
-    st.markdown("# 🌐 XR Portal")
-    st.markdown('<p class="tagline">Innovation with Care VR/AR</p>', unsafe_allow_html=True)
-    st.markdown("**Ασφαλείς, εκπαιδευτικές εμπειρίες AR/VR για μάθηση**")
-    st.markdown('</div>', unsafe_allow_html=True)
+def library_page() -> None:
+    """Main library page."""
     
-    col1, col2, col3 = st.columns(3)
+    # First-time welcome screen
+    if 'first_visit' not in st.session_state:
+        st.session_state.first_visit = True
+    
+    if st.session_state.first_visit:
+        st.markdown("""
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                    padding: 3rem; border-radius: 15px; text-align: center; color: white; margin-bottom: 2rem;">
+            <h1>👋 Καλώς ήρθες στη VR School Library!</h1>
+            <p style="font-size: 1.2rem; margin-top: 1rem;">
+                Εξερεύνησε 48 εμπειρίες VR για μάθηση και χαλάρωση
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            st.markdown("""
+            ### 📱 Πώς Λειτουργεί:
+            
+            **1️⃣ Επίλεξε Εμπειρία**  
+            Διάλεξε από εκπαιδευτικά ή χαλάρωση
+            
+            **2️⃣ Κάνε Κλικ "Λεπτομέρειες"**  
+            Δες πληροφορίες και ερωτήσεις
+            
+            **3️⃣ Σάρωσε QR Code**  
+            Με την κάμερα του smartphone σου
+            
+            **4️⃣ Φόρεσε VR Headset**  
+            Τοποθέτησε το smartphone και enjoy!
+            
+            **5️⃣ Συζήτηση**  
+            Απάντησε τις ερωτήσεις με την τάξη
+            """)
+            
+            st.markdown("---")
+            
+            if st.button("✅ Κατάλαβα! Ας Ξεκινήσουμε", type="primary", use_container_width=True):
+                st.session_state.first_visit = False
+                st.rerun()
+        
+        st.stop()
+    
+    st.markdown("## 📚 Βιβλιοθήκη Εμπειριών")
+    
+    # Filters
+    col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        st.markdown("### 👨‍🏫 Για Εκπαιδευτικούς")
-        st.write("Έτοιμα σενάρια μαθήματος 3-7 λεπτών")
+        category_filter = st.selectbox(
+            "Κατηγορία",
+            ["Όλα", "Εκπαιδευτικό", "Χαλάρωση"]
+        )
     
     with col2:
-        st.markdown("### 🎓 Για Μαθητές")
-        st.write("Αποστολές & διεύρυνση ενδιαφερόντων")
+        # Get unique subcategories
+        conn = get_db()
+        subcat_query = 'SELECT DISTINCT subcategory FROM experiences WHERE subcategory IS NOT NULL'
+        if category_filter != 'Όλα':
+            subcat_query += f" AND category = '{category_filter}'"
+        subcats = [row[0] for row in conn.execute(subcat_query).fetchall()]
+        conn.close()
+        
+        subcategory_filter = st.selectbox(
+            "Υποκατηγορία",
+            ["Όλα"] + sorted(subcats)
+        )
     
     with col3:
-        st.markdown("### 🎁 Για Οικογένειες")
-        st.write("Premium δώρα με ασφαλείς εμπειρίες")
+        difficulty_filter = st.selectbox(
+            "Δυσκολία",
+            ["Όλα", "Εύκολο", "Μέτριο", "Δύσκολο"]
+        )
+    
+    with col4:
+        search_term = st.text_input("🔍 Αναζήτηση", placeholder="π.χ. διάστημα")
     
     st.markdown("---")
     
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        if st.button("🔐 Είσοδος με Κωδικό", type="primary", use_container_width=True):
-            st.session_state.current_page = 'login'
-            st.rerun()
-
-
-def login_page():
-    """Login page."""
-    st.markdown("# 🔐 Είσοδος")
-    st.write("Βάλτε τον κωδικό πρόσβασής σας")
-    
-    col1, col2, col3 = st.columns([1, 2, 1])
-    
-    with col2:
-        code_input = st.text_input(
-            "Κωδικός Πρόσβασης",
-            placeholder="π.χ. TEACHER-DEMO2024",
-            key="login_code"
-        ).upper()
-        
-        if st.button("Είσοδος", type="primary", use_container_width=True):
-            if code_input:
-                conn = get_db()
-                access_code = conn.execute(
-                    'SELECT * FROM access_codes WHERE code = ? AND status = "active"',
-                    (code_input,)
-                ).fetchone()
-                conn.close()
-                
-                if access_code:
-                    st.session_state.logged_in = True
-                    st.session_state.package_type = access_code['package_type']
-                    st.session_state.access_code = code_input
-                    st.session_state.current_page = 'library'
-                    st.success(f"✓ Καλωσήρθες στο {access_code['package_type']} Package!")
-                    st.rerun()
-                else:
-                    st.error("❌ Μη έγκυρος κωδικός")
-            else:
-                st.warning("Παρακαλώ βάλε κωδικό")
-        
-        st.markdown("---")
-        st.info("""
-        **Demo κωδικοί:**
-        - `TEACHER-DEMO2024`
-        - `STUDENT-DEMO2024`
-        - `GIFT-DEMO2024`
-        """)
-        
-        if st.button("← Πίσω στην αρχική"):
-            st.session_state.current_page = 'landing'
-            st.rerun()
-
-
-def library_page():
-    """Library page."""
-    package_type = st.session_state.package_type
-    
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        st.markdown(f"# 📚 Βιβλιοθήκη")
-        st.markdown(f'<span class="package-badge">{package_type} Package</span>', unsafe_allow_html=True)
-    
-    with col2:
-        if st.button("⭐ My Library"):
-            st.session_state.current_page = 'my_library'
-            st.rerun()
-        if st.button("🚪 Έξοδος"):
-            st.session_state.logged_in = False
-            st.session_state.current_page = 'landing'
-            st.rerun()
-    
-    st.markdown("---")
-    
-    conn = get_db()
-    experiences = conn.execute('''
-        SELECT * FROM experiences 
-        WHERE package_types LIKE ?
-        ORDER BY created_at DESC
-    ''', (f'%{package_type}%',)).fetchall()
-    conn.close()
+    # Get filtered experiences
+    experiences = get_all_experiences(
+        category=category_filter if category_filter != 'Όλα' else None,
+        subcategory=subcategory_filter if subcategory_filter != 'Όλα' else None,
+        difficulty=difficulty_filter if difficulty_filter != 'Όλα' else None,
+        search=search_term if search_term else None
+    )
     
     if not experiences:
-        st.info("Δεν υπάρχουν διαθέσιμες εμπειρίες για αυτό το πακέτο.")
+        st.info("Δεν βρέθηκαν εμπειρίες με αυτά τα φίλτρα.")
         return
     
-    cols_per_row = 3
-    for i in range(0, len(experiences), cols_per_row):
-        cols = st.columns(cols_per_row)
-        
-        for j, col in enumerate(cols):
-            idx = i + j
-            if idx < len(experiences):
-                exp = experiences[idx]
-                
-                with col:
-                    with st.container():
-                        st.markdown(f"**{exp['type']}**")
-                        st.markdown(f"### {exp['title']}")
-                        st.write(exp['description'])
-                        st.caption(f"🎯 {exp['age_range']} | ⏱️ {exp['duration_min']} λεπτά")
-                        
-                        motion_class = exp['motion_level'].lower().replace('ή', 'h').replace('έ', 'e')
-                        st.markdown(
-                            f'<span class="motion-badge motion-{motion_class}">'
-                            f'{exp["motion_level"]}</span>',
-                            unsafe_allow_html=True
-                        )
-                        
-                        st.caption(exp['subjects'])
-                        
-                        if st.button("Άνοιγμα →", key=f"open_{exp['id']}", use_container_width=True):
-                            st.session_state.selected_experience = exp['id']
-                            st.session_state.current_page = 'experience'
-                            st.rerun()
+    st.caption(f"Βρέθηκαν {len(experiences)} εμπειρίες")
+    
+    # Render cards
+    for exp in experiences:
+        render_experience_card(exp)
+        st.markdown("---")
 
 
-def experience_page():
-    """Experience detail page."""
-    exp_id = st.session_state.selected_experience
-    
-    conn = get_db()
-    exp = conn.execute('SELECT * FROM experiences WHERE id = ?', (exp_id,)).fetchone()
-    
-    if not exp:
-        st.error("Experience not found")
-        return
-    
-    session_id = st.session_state.session_id
-    is_favorite = conn.execute(
-        'SELECT 1 FROM user_favorites WHERE session_id = ? AND experience_id = ?',
-        (session_id, exp_id)
-    ).fetchone() is not None
-    
-    col1, col2 = st.columns([4, 1])
-    
-    with col1:
-        st.markdown(f"# {exp['title']}")
-        st.markdown(f"**{exp['type']}** | {exp['age_range']}")
-    
-    with col2:
-        fav_label = "★ Αφαίρεση" if is_favorite else "☆ Αποθήκευση"
-        if st.button(fav_label, use_container_width=True):
-            if is_favorite:
-                conn.execute(
-                    'DELETE FROM user_favorites WHERE session_id = ? AND experience_id = ?',
-                    (session_id, exp_id)
-                )
-            else:
-                conn.execute(
-                    'INSERT INTO user_favorites (session_id, experience_id) VALUES (?, ?)',
-                    (session_id, exp_id)
-                )
-            conn.commit()
+def experience_page() -> None:
+    """Detailed experience page."""
+    if not st.session_state.selected_exp_id:
+        st.warning("Δεν επιλέχθηκε εμπειρία.")
+        if st.button("← Επιστροφή στη Βιβλιοθήκη"):
+            st.session_state.current_view = 'library'
             st.rerun()
+        return
     
-    if st.button("← Πίσω στη βιβλιοθήκη"):
-        st.session_state.current_page = 'library'
+    exp = get_experience_by_id(st.session_state.selected_exp_id)
+    if not exp:
+        st.error("Η εμπειρία δεν βρέθηκε.")
+        return
+    
+    # Track views once per session per experience
+    if 'viewed_experiences' not in st.session_state:
+        st.session_state.viewed_experiences = set()
+    
+    if exp['id'] not in st.session_state.viewed_experiences:
+        increment_views(exp['id'])
+        st.session_state.viewed_experiences.add(exp['id'])
+    
+    # Back button
+    if st.button("← Επιστροφή", key="back_btn"):
+        st.session_state.current_view = 'library'
         st.rerun()
     
     st.markdown("---")
     
-    col1, col2 = st.columns([2, 1])
+    # Title & Category
+    category_class = 'educational' if exp['category'] == 'Εκπαιδευτικό' else 'relaxation'
+    st.markdown(f"""
+    <span class="category-badge {category_class}">{exp['category']}</span>
+    <span class="category-badge" style="background: #fff3e0; color: #e65100;">
+        {exp['subcategory']}
+    </span>
+    """, unsafe_allow_html=True)
     
-    with col1:
-        st.write(exp['description'])
-        
-        st.markdown("### 📋 Πληροφορίες")
-        
-        info_cols = st.columns(4)
-        with info_cols[0]:
-            st.metric("Ηλικίες", exp['age_range'])
-        with info_cols[1]:
-            st.metric("Διάρκεια", f"{exp['duration_min']} λεπτά")
-        with info_cols[2]:
-            st.metric("Μαθήματα", exp['subjects'].split(',')[0])
-        with info_cols[3]:
-            motion_class = exp['motion_level'].lower().replace('ή', 'h').replace('έ', 'e')
-            st.markdown(
-                f'<div style="text-align: center;">'
-                f'<span class="motion-badge motion-{motion_class}">'
-                f'{exp["motion_level"]}</span></div>',
-                unsafe_allow_html=True
-            )
-        
-        if exp['learning_goal']:
-            st.info(f"**🎯 Στόχος Μάθησης:** {exp['learning_goal']}")
-        
-        if exp['safety_note']:
-            st.warning(f"**⚠️ Σημείωση:** {exp['safety_note']}")
+    st.markdown(f"# {exp['title']}")
+    st.write(exp['description'])
     
-    with col2:
-        st.markdown("### 📱 Τρόποι Πρόσβασης")
-        
-        short_url = f"http://localhost:8501/go/{exp['short_code']}"
-        
-        if st.button("🚀 Έναρξη Εμπειρίας", type="primary", use_container_width=True):
-            conn.execute('UPDATE experiences SET opens_count = opens_count + 1 WHERE id = ?', (exp_id,))
-            conn.commit()
-            
-            if exp['questions']:
-                st.session_state.show_mission = True
-        
-        st.markdown("---")
-        st.markdown("### 📲 QR Code")
-        st.caption("Σκανάρισμα από άλλη συσκευή")
-        
-        qr_url = f"https://chart.googleapis.com/chart?cht=qr&chs=300x300&chl={quote(short_url)}"
-        st.image(qr_url, width=200)
-        st.caption(short_url)
-    
-    conn.close()
-    
-    if exp['questions'] and st.session_state.get('show_mission', False):
-        with st.expander("🎯 Τι κρατάω από αυτή την εμπειρία;", expanded=True):
-            st.markdown(exp['questions'].replace('\n', '\n\n'))
-            if st.button("Κατάλαβα!", use_container_width=True):
-                st.session_state.show_mission = False
-                st.markdown(f'<meta http-equiv="refresh" content="0; url={exp["target_url"]}">', unsafe_allow_html=True)
-                st.rerun()
-
-
-def my_library_page():
-    """My Library page."""
-    st.markdown("# ⭐ My Library")
-    st.write("Τα αγαπημένα σου")
-    
-    col1, col2 = st.columns([1, 5])
-    with col1:
-        if st.button("← Βιβλιοθήκη"):
-            st.session_state.current_page = 'library'
-            st.rerun()
+    col_info1, col_info2, col_info3 = st.columns(3)
+    col_info1.metric("Διάρκεια", f"{exp['duration_min']} λεπτά")
+    col_info2.metric("Δυσκολία", exp['difficulty'])
+    col_info3.metric("Προβολές", exp['views_count'])
     
     st.markdown("---")
     
-    session_id = st.session_state.session_id
+    # Main content columns
+    col_left, col_right = st.columns([2, 1])
     
-    conn = get_db()
-    favorites = conn.execute('''
-        SELECT e.* FROM experiences e
-        JOIN user_favorites f ON e.id = f.experience_id
-        WHERE f.session_id = ?
-        ORDER BY f.created_at DESC
-    ''', (session_id,)).fetchall()
-    conn.close()
+    with col_left:
+        # Thumbnail
+        if exp['thumbnail_url']:
+            st.image(exp['thumbnail_url'], use_container_width=True)
+        
+        # Educational info
+        if exp['learning_goals']:
+            st.markdown("### 🎯 Μαθησιακοί Στόχοι")
+            st.write(exp['learning_goals'])
+        
+        if exp['key_concepts']:
+            st.markdown("### 🔑 Βασικές Έννοιες")
+            st.write(exp['key_concepts'])
+        
+        if exp['discussion_questions']:
+            st.markdown("### 💬 Ερωτήσεις Συζήτησης")
+            # Format questions as bulleted list
+            questions = exp['discussion_questions'].strip()
+            if questions:
+                # Split by newlines and format each line
+                lines = [line.strip() for line in questions.split('\n') if line.strip()]
+                for line in lines:
+                    # Remove existing numbering if present (e.g., "1. " or "• ")
+                    line = line.lstrip('0123456789.• ')
+                    st.markdown(f"- {line}")
+            else:
+                st.write(exp['discussion_questions'])
+        
+        if exp['safety_notes']:
+            st.markdown("### ⚠️ Σημειώσεις Ασφάλειας")
+            st.info(exp['safety_notes'])
+    
+    with col_right:
+        # QR Code
+        st.markdown("### 📱 Σάρωσε για VR")
+        qr_img = generate_qr_code(exp['youtube_url'])
+        if qr_img:
+            st.markdown(f"""
+            <div class="qr-container">
+                <img src="{qr_img}" style="width: 100%; max-width: 250px;">
+                <p style="font-size: 0.85rem; margin-top: 0.5rem; color: #666;">
+                    Σάρωσε με την κάμερα του smartphone σου
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.warning("Εγκατάσταση: `pip install qrcode[pil]`")
+        
+        # Direct link
+        st.markdown("### 🔗 Άμεσο Link")
+        st.code(exp['youtube_url'], language="text")
+        
+        st.markdown(f"[Άνοιγμα σε YouTube]({exp['youtube_url']})")
+        
+        # Favorite button
+        st.markdown("---")
+        is_fav = is_favorite(st.session_state.session_id, exp['id'])
+        fav_text = "⭐ Αφαίρεση από Αγαπημένα" if is_fav else "☆ Προσθήκη στα Αγαπημένα"
+        
+        if st.button(fav_text, key="fav_detail", use_container_width=True, type="primary"):
+            new_state = toggle_favorite(st.session_state.session_id, exp['id'])
+            st.success("✓ Προστέθηκε!" if new_state else "✓ Αφαιρέθηκε!")
+            st.rerun()
+
+
+def favorites_page() -> None:
+    """Favorites page."""
+    st.markdown("## ⭐ Τα Αγαπημένα μου")
+    
+    favorites = get_favorites(st.session_state.session_id)
     
     if not favorites:
-        st.info("Δεν έχεις προσθέσει ακόμα αγαπημένα.")
+        st.info("Δεν έχεις προσθέσει ακόμα αγαπημένες εμπειρίες.")
         if st.button("📚 Εξερεύνησε τη Βιβλιοθήκη", type="primary"):
-            st.session_state.current_page = 'library'
+            st.session_state.current_view = 'library'
             st.rerun()
         return
     
-    cols_per_row = 3
-    for i in range(0, len(favorites), cols_per_row):
-        cols = st.columns(cols_per_row)
-        
-        for j, col in enumerate(cols):
-            idx = i + j
-            if idx < len(favorites):
-                exp = favorites[idx]
-                
-                with col:
-                    st.markdown(f"**{exp['type']}**")
-                    st.markdown(f"### {exp['title']}")
-                    st.write(exp['description'])
-                    st.caption(f"🎯 {exp['age_range']} | ⏱️ {exp['duration_min']} λεπτά")
-                    
-                    if st.button("Άνοιγμα →", key=f"fav_{exp['id']}", use_container_width=True):
-                        st.session_state.selected_experience = exp['id']
-                        st.session_state.current_page = 'experience'
-                        st.rerun()
-
-
-def admin_page():
-    """Admin panel."""
-    st.markdown("# 🔧 Admin Panel")
+    st.caption(f"Έχεις {len(favorites)} αγαπημένες εμπειρίες")
+    st.markdown("---")
     
-    tab1, tab2, tab3 = st.tabs(["📊 Dashboard", "➕ Προσθήκη", "🔑 Κωδικοί"])
+    for exp in favorites:
+        render_experience_card(exp)
+        st.markdown("---")
+
+
+def help_page() -> None:
+    """Help/Instructions page."""
+    st.markdown("## ℹ️ Οδηγίες Χρήσης")
+    
+    st.markdown("""
+    ### 📱 Πώς να χρησιμοποιήσεις τη VR Library
+    
+    #### Βήμα 1: Επίλεξε Εμπειρία
+    - Περιηγήσου στη **Βιβλιοθήκη** και βρες κάτι που σε ενδιαφέρει
+    - Χρησιμοποίησε φίλτρα (κατηγορία, δυσκολία) για γρηγορότερη αναζήτηση
+    - Κάνε κλικ στο "Λεπτομέρειες" για περισσότερες πληροφορίες
+    
+    #### Βήμα 2: Σάρωσε το QR Code
+    - Στη σελίδα λεπτομερειών, θα βρεις ένα **QR Code**
+    - Ανοίξε την κάμερα του smartphone σου
+    - Σάρωσε το QR code → θα ανοίξει αυτόματα το YouTube
+    
+    #### Βήμα 3: Φόρεσε το VR Headset
+    - Τοποθέτησε το smartphone στο **VR headset case**
+    - Φόρεσε το headset
+    - Πάτησε Play στο video
+    - Κίνησε το κεφάλι σου για να δεις γύρω σου!
+    
+    #### 💡 Συμβουλές
+    - Χρησιμοποίησε **ακουστικά** για καλύτερη εμπειρία
+    - Κάθισε σε σταθερό σημείο (καρέκλα, καναπές)
+    - Κάνε διάλειμμα κάθε 15-20 λεπτά
+    - Αν νιώσεις ζάλη, σταμάτα αμέσως
+    
+    ### 🎯 Κατηγορίες
+    
+    **Εκπαιδευτικό**: Μάθε για Φυσική, Ιστορία, Βιολογία, Χημεία
+    - Ιδανικό για προετοιμασία μαθημάτων
+    - Περιλαμβάνει ερωτήσεις συζήτησης
+    
+    **Χαλάρωση**: Φύση, Περιπέτειες, Χόμπι
+    - Για διάλειμμα από το διάβασμα
+    - Μείωση άγχους
+    - Διασκέδαση
+    
+    ### ⚠️ Ασφάλεια
+    
+    - **Διάβασε πάντα** τις σημειώσεις ασφάλειας
+    - **Μην** χρησιμοποιείς VR αν έχεις ακροφοβία (σε εμπειρίες ύψους)
+    - **Μην** χρησιμοποιείς VR αν είσαι επιρρεπής σε επιληπτικές κρίσεις
+    - **Σταμάτα** αν νιώσεις ναυτία, ζάλη, ή ανησυχία
+    
+    ### ❓ Συχνές Ερωτήσεις
+    
+    **Q: Χρειάζομαι ειδικό headset;**
+    A: Όχι! Αρκεί ένα Google Cardboard-style case (κοστίζει 5-15€).
+    
+    **Q: Λειτουργεί σε όλα τα smartphones;**
+    A: Ναι, αρκεί να έχει gyroscope (σχεδόν όλα τα σύγχρονα).
+    
+    **Q: Τι κάνω αν δεν δουλεύει το QR code;**
+    A: Αντίγραψε το link και ανοίξτο στο YouTube app.
+    
+    **Q: Μπορώ να χρησιμοποιήσω ακουστικά Bluetooth;**
+    A: Ναι! Θα βελτιώσει την εμπειρία.
+    """)
+
+
+def admin_page() -> None:
+    """Admin panel."""
+    st.markdown("## 🔧 Admin Panel")
+    
+    tab1, tab2 = st.tabs(["📊 Στατιστικά", "➕ Προσθήκη Εμπειρίας"])
     
     conn = get_db()
     
     with tab1:
-        total_exp = conn.execute('SELECT COUNT(*) as c FROM experiences').fetchone()['c']
-        total_codes = conn.execute('SELECT COUNT(*) as c FROM access_codes').fetchone()['c']
-        total_opens = conn.execute('SELECT SUM(opens_count) as s FROM experiences').fetchone()['s'] or 0
+        # Stats
+        total_exp = conn.execute('SELECT COUNT(*) as c FROM experiences').fetchone()[0]
+        total_edu = conn.execute(
+            "SELECT COUNT(*) as c FROM experiences WHERE category = 'Εκπαιδευτικό'"
+        ).fetchone()[0]
+        total_rel = conn.execute(
+            "SELECT COUNT(*) as c FROM experiences WHERE category = 'Χαλάρωση'"
+        ).fetchone()[0]
+        total_views = conn.execute('SELECT SUM(views_count) as s FROM experiences').fetchone()[0] or 0
         
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Εμπειρίες", total_exp)
-        col2.metric("Κωδικοί", total_codes)
-        col3.metric("Opens", total_opens)
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Σύνολο Εμπειριών", total_exp)
+        col2.metric("Εκπαιδευτικά", total_edu)
+        col3.metric("Χαλάρωση", total_rel)
+        col4.metric("Συνολικές Προβολές", total_views)
         
         st.markdown("---")
-        st.markdown("### 🔥 Top Εμπειρίες")
+        st.markdown("### 🔥 Top 10 Εμπειρίες")
         
         top_exp = conn.execute('''
-            SELECT title, type, opens_count 
-            FROM experiences 
-            ORDER BY opens_count DESC 
+            SELECT title, category, subcategory, views_count, duration_min
+            FROM experiences
+            ORDER BY views_count DESC
             LIMIT 10
         ''').fetchall()
         
-        for exp in top_exp:
-            col1, col2, col3 = st.columns([3, 1, 1])
-            col1.write(exp['title'])
-            col2.write(exp['type'])
-            col3.write(f"{exp['opens_count']} opens")
+        for idx, exp in enumerate(top_exp, 1):
+            col1, col2, col3, col4, col5 = st.columns([1, 4, 2, 2, 1])
+            col1.write(f"**#{idx}**")
+            col2.write(exp[0])  # title
+            col3.write(exp[1])  # category
+            col4.write(exp[2])  # subcategory
+            col5.write(f"{exp[3]} 👁️")  # views
     
     with tab2:
-        st.markdown("### Προσθήκη Εμπειρίας")
+        st.markdown("### Προσθήκη Νέας Εμπειρίας")
         
         with st.form("add_experience"):
             col1, col2 = st.columns(2)
             
             with col1:
-                short_code = st.text_input("Short Code*", placeholder="space01")
-                title = st.text_input("Τίτλος*")
-                exp_type = st.selectbox("Τύπος", ["VR360", "AR", "Video360"])
-                age_range = st.text_input("Ηλικίες", value="8-14")
-                duration = st.number_input("Διάρκεια (λεπτά)", value=5, min_value=1)
+                title = st.text_input("Τίτλος*", placeholder="π.χ. Εξερεύνηση Αρχαίας Ρώμης")
+                category = st.selectbox("Κατηγορία*", ["Εκπαιδευτικό", "Χαλάρωση"])
+                subcategory = st.text_input(
+                    "Υποκατηγορία*",
+                    placeholder="π.χ. Ιστορία, Φύση, Περιπέτειες"
+                )
+                duration = st.number_input("Διάρκεια (λεπτά)*", min_value=1, value=15)
+                difficulty = st.selectbox("Δυσκολία*", ["Εύκολο", "Μέτριο", "Δύσκολο"])
             
             with col2:
-                subjects = st.text_input("Μαθήματα")
-                motion_level = st.selectbox("Motion Level", ["Ήρεμο", "Μέτριο", "Έντονο"])
-                target_url = st.text_input("Target URL*")
-                packages = st.multiselect("Πακέτα", ["TEACHER", "STUDENT", "GIFT"], default=["TEACHER", "STUDENT", "GIFT"])
+                youtube_url = st.text_input(
+                    "YouTube URL*",
+                    placeholder="https://www.youtube.com/watch?v=..."
+                )
+                thumbnail_url = st.text_input(
+                    "Thumbnail URL (προαιρετικό)",
+                    placeholder="https://img.youtube.com/vi/VIDEO_ID/maxresdefault.jpg"
+                )
             
-            description = st.text_area("Περιγραφή")
-            learning_goal = st.text_input("Στόχος Μάθησης")
-            questions = st.text_area("Ερωτήσεις (3)", placeholder="1. ...\n2. ...\n3. ...")
-            safety_note = st.text_input("Σημείωση Ασφάλειας")
+            description = st.text_area("Περιγραφή*", placeholder="Σύντομη περιγραφή...")
+            learning_goals = st.text_input("Μαθησιακοί Στόχοι", placeholder="Τι θα μάθουν;")
+            key_concepts = st.text_input("Βασικές Έννοιες", placeholder="Κύριες έννοιες...")
+            discussion_questions = st.text_area(
+                "Ερωτήσεις Συζήτησης",
+                placeholder="1. ...\n2. ...\n3. ..."
+            )
+            safety_notes = st.text_input("Σημειώσεις Ασφάλειας", placeholder="π.χ. Όχι για ακροφοβία")
             
-            if st.form_submit_button("✅ Προσθήκη", type="primary"):
-                if short_code and title and target_url:
-                    try:
-                        conn.execute('''
-                            INSERT INTO experiences 
-                            (short_code, title, description, type, age_range, duration_min, 
-                             subjects, learning_goal, questions, safety_note, motion_level, 
-                             target_url, package_types)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        ''', (
-                            short_code, title, description, exp_type, age_range, duration,
-                            subjects, learning_goal, questions, safety_note, motion_level,
-                            target_url, ','.join(packages)
-                        ))
-                        conn.commit()
-                        st.success("✓ Εμπειρία προστέθηκε!")
-                    except Exception as e:
-                        st.error(f"Σφάλμα: {e}")
+            submitted = st.form_submit_button("✅ Προσθήκη Εμπειρίας", type="primary")
+            
+            if submitted:
+                if not all([title, category, subcategory, youtube_url, description]):
+                    st.error("Συμπλήρωσε όλα τα υποχρεωτικά πεδία (*)")
                 else:
-                    st.error("Συμπλήρωσε τα απαραίτητα πεδία (*)")
-    
-    with tab3:
-        st.markdown("### Δημιουργία Κωδικού")
-        
-        col1, col2 = st.columns([2, 1])
-        with col1:
-            package_type = st.selectbox("Package Type", ["TEACHER", "STUDENT", "GIFT"])
-        with col2:
-            if st.button("Generate Code", type="primary", use_container_width=True):
-                code = f"{package_type}-{secrets.token_hex(4).upper()}"
-                conn.execute('INSERT INTO access_codes (code, package_type) VALUES (?, ?)', (code, package_type))
-                conn.commit()
-                st.success(f"✓ Δημιουργήθηκε: `{code}`")
-        
-        st.markdown("---")
-        st.markdown("### Πρόσφατοι Κωδικοί")
-        
-        codes = conn.execute('SELECT * FROM access_codes ORDER BY created_at DESC LIMIT 20').fetchall()
-        
-        for code in codes:
-            col1, col2, col3 = st.columns([3, 2, 1])
-            col1.code(code['code'])
-            col2.write(code['package_type'])
-            col3.write(code['status'])
+                    # Validate YouTube URL
+                    is_valid_youtube = (
+                        'youtube.com/watch?v=' in youtube_url or
+                        'youtu.be/' in youtube_url or
+                        'youtube.com/embed/' in youtube_url
+                    )
+                    
+                    if not is_valid_youtube:
+                        st.error("❌ Μη έγκυρο YouTube URL! Χρησιμοποίησε format:\n- youtube.com/watch?v=...\n- youtu.be/...")
+                    else:
+                        try:
+                            conn.execute('''
+                                INSERT INTO experiences
+                                (title, description, category, subcategory, duration_min, difficulty,
+                                 youtube_url, thumbnail_url, learning_goals, key_concepts,
+                                 discussion_questions, safety_notes)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            ''', (
+                                title, description, category, subcategory, duration, difficulty,
+                                youtube_url, thumbnail_url or None, learning_goals or None,
+                                key_concepts or None, discussion_questions or None, safety_notes or None
+                            ))
+                            conn.commit()
+                            st.success("✓ Η εμπειρία προστέθηκε επιτυχώς!")
+                        except Exception as e:
+                            st.error(f"Σφάλμα: {e}")
     
     conn.close()
 
 
 # ============================================================================
-# ROUTER
+# MAIN ROUTER
 # ============================================================================
 
-def main():
-    """Main app router."""
+def main() -> None:
+    """Main application router."""
+    # Initialize DB
+    init_db()
     
-    query_params = st.query_params
-    if 'admin' in query_params:
+    # Render header
+    render_header()
+    
+    # Navigation
+    render_navigation()
+    
+    st.markdown("---")
+    
+    # Route to correct page
+    if st.session_state.current_view == 'library':
+        library_page()
+    elif st.session_state.current_view == 'experience':
+        experience_page()
+    elif st.session_state.current_view == 'favorites':
+        favorites_page()
+    elif st.session_state.current_view == 'help':
+        help_page()
+    elif st.session_state.current_view == 'admin':
         admin_page()
-        return
-    
-    if not st.session_state.logged_in:
-        if st.session_state.current_page == 'login':
-            login_page()
-        else:
-            landing_page()
     else:
-        if st.session_state.current_page == 'library':
-            library_page()
-        elif st.session_state.current_page == 'experience':
-            experience_page()
-        elif st.session_state.current_page == 'my_library':
-            my_library_page()
-        else:
-            library_page()
+        library_page()
 
 
 if __name__ == "__main__":
