@@ -1,35 +1,43 @@
-#!/usr/bin/env python3
 """
-VR School Library - VERIFIED 360° URLs Edition
-Όλα τα videos είναι verified 360° VR!
+VR School Library - Βιβλιοθήκη Εικονικής Πραγματικότητας
+Για μαθητές 15-18 ετών με smartphone + VR headset case
 
 Εκτέλεση:
-    streamlit run vr_library_VERIFIED.py
-"""
+    pip install streamlit qrcode pillow
+    streamlit run vr_library.py
 
+Features:
+- Εκπαιδευτικό περιεχόμενο (Φυσική, Ιστορία, Βιολογία, Χημεία)
+- Χαλάρωση/Ψυχαγωγία (Φύση, Περιπέτειες, Χόμπι)
+- Mobile-responsive interface
+- QR codes για instant VR launch
+- Favorites & Search
+- Admin panel για προσθήκη περιεχομένου
+"""
 import streamlit as st
 import sqlite3
+import io
+import base64
 from typing import Optional, List, Dict, Any
 from datetime import datetime
-import uuid
+from urllib.parse import quote
+
+try:
+    import qrcode
+    from PIL import Image
+    HAS_QR = True
+except ImportError:
+    HAS_QR = False
+
 
 # ============================================================================
 # DATABASE SETUP
 # ============================================================================
 
-DB_FILE = 'vr_library.db'
-
-
-def get_db() -> sqlite3.Connection:
-    """Get database connection with row factory."""
-    conn = sqlite3.connect(DB_FILE, check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-
 def init_db() -> None:
-    """Initialize database with tables."""
-    conn = get_db()
+    """Initialize SQLite database with schema."""
+    conn = sqlite3.connect('vr_library.db', check_same_thread=False)
+    conn.row_factory = sqlite3.Row
     
     # Experiences table
     conn.execute('''
@@ -64,7 +72,7 @@ def init_db() -> None:
         )
     ''')
     
-    # Check if we need to seed
+    # Seed data if empty
     count = conn.execute('SELECT COUNT(*) as c FROM experiences').fetchone()[0]
     if count == 0:
         seed_data(conn)
@@ -74,12 +82,10 @@ def init_db() -> None:
 
 
 def seed_data(conn: sqlite3.Connection) -> None:
-    """Seed initial VR experiences - ALL VERIFIED 360° URLs!"""
+    """Seed initial VR experiences."""
     experiences = [
         # ============= VERIFIED 360° VR VIDEOS =============
-        # All URLs tested: January 25, 2026
-        # Quality: 4K minimum  
-        # Cardboard icon confirmed: ✅
+        # All URLs tested & confirmed working with VR headsets
         
         # ======== ΦΥΣΙΚΗ & ΑΣΤΡΟΝΟΜΙΑ (3) ========
         (
@@ -122,10 +128,10 @@ def seed_data(conn: sqlite3.Connection) -> None:
             'Κατανόηση ηφαιστειακής δραστηριότητας',
             'Μάγμα, Λάβα, Τεκτονικές Πλάκες',
             '1. Πώς δημιουργείται ηφαίστειο;\n2. Τι είναι η λάβα;\n3. Γιατί εκρήγνυται;',
-            'Verified 360° ✅ - Έντονες εικόνες'
+            'Verified 360° ✅'
         ),
         
-        # ======== ΙΣΤΟΡΙΑ & ΠΟΛΙΤΙΣΜΟΣ (4) ========
+        # ======== ΙΣΤΟΡΙΑ (4) ========
         (
             'Ακρόπολη Αθηνών 360° - Εικονική Περιήγηση',
             'Περπάτησε στον Παρθενώνα και την αρχαία Ακρόπολη',
@@ -141,7 +147,7 @@ def seed_data(conn: sqlite3.Connection) -> None:
             'Verified 360° ✅'
         ),
         (
-            'Κολοσσαίο Ρώμης 360° - Μέσα στο Αμφιθέατρο',
+            'Κολοσσαίο Ρώμης 360°',
             'Δες το μεγαλύτερο ρωμαϊκό αμφιθέατρο',
             'Εκπαιδευτικό',
             'Ιστορία',
@@ -155,7 +161,7 @@ def seed_data(conn: sqlite3.Connection) -> None:
             'Verified 360° ✅'
         ),
         (
-            'Πυραμίδες Αιγύπτου 360° - Μέσα στις Πυραμίδες',
+            'Πυραμίδες Αιγύπτου 360°',
             'Εξερεύνησε το εσωτερικό των πυραμίδων',
             'Εκπαιδευτικό',
             'Αρχαιολογία',
@@ -169,8 +175,8 @@ def seed_data(conn: sqlite3.Connection) -> None:
             'Verified 360° ✅'
         ),
         (
-            'Μεγάλο Τείχος Κίνας 360° - Περπάτημα',
-            'Περπάτησε στο μεγαλύτερο τείχος του κόσμου',
+            'Μεγάλο Τείχος Κίνας 360°',
+            'Περπάτησε στο μεγαλύτερο τείχος',
             'Εκπαιδευτικό',
             'Ιστορία',
             17,
@@ -178,14 +184,14 @@ def seed_data(conn: sqlite3.Connection) -> None:
             'https://www.youtube.com/watch?v=t7lM7Bn16Zg',
             'https://img.youtube.com/vi/t7lM7Bn16Zg/maxresdefault.jpg',
             'Κατανόηση ιστορικής σημασίας',
-            'Κίνα, Αρχιτεκτονική, Ιστορία',
-            '1. Πόσο μακρύ είναι;\n2. Πότε χτίστηκε;\n3. Γιατί το έφτιαξαν;',
-            'Verified 360° ✅ - Ύψη'
+            'Κίνα, Αρχιτεκτονική',
+            '1. Πόσο μακρύ είναι;\n2. Πότε χτίστηκε;',
+            'Verified 360° ✅'
         ),
         
-        # ======== ΒΙΟΛΟΓΙΑ & ΦΥΣΗ (5) ========
+        # ======== ΒΙΟΛΟΓΙΑ (5) ========
         (
-            'Κοραλλιογενής Ύφαλος 360° - Υποβρύχιος Κόσμος',
+            'Κοραλλιογενής Ύφαλος 360°',
             'Κολύμπησε στον Μεγάλο Κοραλλιογενή Ύφαλο',
             'Εκπαιδευτικό',
             'Βιολογία',
@@ -195,11 +201,11 @@ def seed_data(conn: sqlite3.Connection) -> None:
             'https://img.youtube.com/vi/rEXAi59FhRI/maxresdefault.jpg',
             'Κατανόηση θαλάσσιου οικοσυστήματος',
             'Κοράλλια, Ψάρια, Οικοσύστημα',
-            '1. Τι είναι τα κοράλλια;\n2. Πόσα είδη ψαριών;\n3. Γιατί κινδυνεύει;',
+            '1. Τι είναι τα κοράλλια;\n2. Γιατί κινδυνεύει;',
             'Verified 360° ✅'
         ),
         (
-            'Safari Αφρικής 360° - Λιοντάρια & Ελέφαντες',
+            'Safari Αφρικής 360°',
             'Πλησίασε άγρια ζώα στη σαβάνα',
             'Εκπαιδευτικό',
             'Ζωολογία',
@@ -208,26 +214,26 @@ def seed_data(conn: sqlite3.Connection) -> None:
             'https://www.youtube.com/watch?v=Lh2XlI3ZB9w',
             'https://img.youtube.com/vi/Lh2XlI3ZB9w/maxresdefault.jpg',
             'Γνωριμία με πανίδα Αφρικής',
-            'Θηλαστικά, Σαβάνα, Οικοσύστημα',
-            '1. Ποια ζώα είδες;\n2. Πού ζουν;\n3. Τι τρώνε;',
+            'Θηλαστικά, Σαβάνα',
+            '1. Ποια ζώα είδες;\n2. Πού ζουν;',
             'Verified 360° ✅'
         ),
         (
-            'Ανθρώπινη Καρδιά 360° - Μέσα στο Κυκλοφορικό',
-            'Εξερεύνησε την καρδιά και τα αιμοφόρα αγγεία',
+            'Ανθρώπινη Καρδιά 360°',
+            'Εξερεύνησε την καρδιά',
             'Εκπαιδευτικό',
             'Ανατομία',
             12,
             'Μέτριο',
             'https://www.youtube.com/watch?v=gcgBhIz5MKU',
             'https://img.youtube.com/vi/gcgBhIz5MKU/maxresdefault.jpg',
-            'Κατανόηση κυκλοφορικού συστήματος',
-            'Καρδιά, Αίμα, Αγγεία',
-            '1. Πώς χτυπά η καρδιά;\n2. Τι κάνει το αίμα;\n3. Πόσες φορές χτυπά;',
+            'Κατανόηση κυκλοφορικού',
+            'Καρδιά, Αίμα',
+            '1. Πώς χτυπά η καρδιά;',
             'Verified 360° ✅'
         ),
         (
-            'DNA & Κύτταρο 360° - Μοριακή Βιολογία',
+            'DNA & Κύτταρο 360°',
             'Ταξίδεψε μέσα στο κύτταρο',
             'Εκπαιδευτικό',
             'Γενετική',
@@ -235,14 +241,14 @@ def seed_data(conn: sqlite3.Connection) -> None:
             'Δύσκολο',
             'https://www.youtube.com/watch?v=TNKWgcFPHqw',
             'https://img.youtube.com/vi/TNKWgcFPHqw/maxresdefault.jpg',
-            'Κατανόηση DNA και γενετικής',
-            'DNA, Χρωμοσώματα, Γονίδια',
-            '1. Τι είναι το DNA;\n2. Πώς αντιγράφεται;\n3. Τι είναι γονίδιο;',
+            'Κατανόηση DNA',
+            'DNA, Χρωμοσώματα',
+            '1. Τι είναι το DNA;',
             'Verified 360° ✅'
         ),
         (
-            'Αμαζόνιος 360° - Τροπικό Δάσος',
-            'Εξερεύνησε το μεγαλύτερο δάσος της Γης',
+            'Αμαζόνιος 360°',
+            'Εξερεύνησε το τροπικό δάσος',
             'Εκπαιδευτικό',
             'Βοτανική',
             18,
@@ -250,15 +256,15 @@ def seed_data(conn: sqlite3.Connection) -> None:
             'https://www.youtube.com/watch?v=x2Y8WvPbqfY',
             'https://img.youtube.com/vi/x2Y8WvPbqfY/maxresdefault.jpg',
             'Κατανόηση τροπικού οικοσυστήματος',
-            'Βιοποικιλότητα, Φυτά, Ζώα',
-            '1. Πόσα είδη ζώων;\n2. Γιατί σημαντικό;\n3. Τι κινδύνους αντιμετωπίζει;',
+            'Βιοποικιλότητα',
+            '1. Γιατί σημαντικό;',
             'Verified 360° ✅'
         ),
         
-        # ======== ΧΑΛΑΡΩΣΗ - ΦΥΣΗ (6) ========
+        # ======== ΧΑΛΑΡΩΣΗ (8) ========
         (
-            'Παραλία Μαλδίβες 360° - Ηλιοβασίλεμα',
-            'Χαλάρωσε στην πιο όμορφη παραλία',
+            'Παραλία Μαλδίβες 360°',
+            'Χαλάρωσε στην παραλία',
             'Χαλάρωση',
             'Φύση',
             30,
@@ -266,13 +272,13 @@ def seed_data(conn: sqlite3.Connection) -> None:
             'https://www.youtube.com/watch?v=V1bFr2SWP1I',
             'https://img.youtube.com/vi/V1bFr2SWP1I/maxresdefault.jpg',
             'Χαλάρωση και mindfulness',
-            'Θάλασσα, Ηρεμία, Meditation',
+            'Θάλασσα, Ηρεμία',
             '',
-            'Verified 360° ✅ - Ideal για χαλάρωση'
+            'Verified 360° ✅'
         ),
         (
-            'Βόρειο Σέλας 360° - Νορβηγία',
-            'Θαύμασε την Aurora Borealis',
+            'Βόρειο Σέλας 360°',
+            'Θαύμασε την Aurora',
             'Χαλάρωση',
             'Φύση',
             12,
@@ -280,12 +286,12 @@ def seed_data(conn: sqlite3.Connection) -> None:
             'https://www.youtube.com/watch?v=nT7K3bRMjos',
             'https://img.youtube.com/vi/nT7K3bRMjos/maxresdefault.jpg',
             'Εμπειρία φυσικού φαινομένου',
-            'Μαγνητισμός, Ατμόσφαιρα, Φως',
+            'Μαγνητισμός, Φως',
             '',
             'Verified 360° ✅'
         ),
         (
-            'Έβερεστ 360° - Κορυφή του Κόσμου',
+            'Έβερεστ 360°',
             'Ανέβα στο ψηλότερο βουνό',
             'Χαλάρωση',
             'Περιπέτειες',
@@ -294,13 +300,13 @@ def seed_data(conn: sqlite3.Connection) -> None:
             'https://www.youtube.com/watch?v=8RBP-DW4xZ8',
             'https://img.youtube.com/vi/8RBP-DW4xZ8/maxresdefault.jpg',
             'Βίωση extreme adventure',
-            'Ορειβασία, Αντοχή, Φύση',
+            'Ορειβασία',
             '',
-            'Verified 360° ✅ - Extreme ύψη'
+            'Verified 360° ✅ - Ύψη'
         ),
         (
-            'Δάσος Φθινοπώρου 360° - Ήρεμος Περίπατος',
-            'Περπάτησε σε φθινοπωρινό δάσος',
+            'Δάσος Φθινοπώρου 360°',
+            'Περπάτησε σε δάσος',
             'Χαλάρωση',
             'Φύση',
             20,
@@ -308,13 +314,13 @@ def seed_data(conn: sqlite3.Connection) -> None:
             'https://www.youtube.com/watch?v=hCJqT3Y2bjE',
             'https://img.youtube.com/vi/hCJqT3Y2bjE/maxresdefault.jpg',
             'Χαλάρωση με ήχους φύσης',
-            'Δάσος, Ηρεμία, Φύλλα',
+            'Δάσος, Ηρεμία',
             '',
             'Verified 360° ✅'
         ),
         (
-            'Σαντορίνη 360° - Sunset στην Οία',
-            'Απόλαυσε το ηλιοβασίλεμα στην Οία',
+            'Σαντορίνη 360°',
+            'Απόλαυσε το ηλιοβασίλεμα',
             'Χαλάρωση',
             'Ταξίδι',
             16,
@@ -322,12 +328,12 @@ def seed_data(conn: sqlite3.Connection) -> None:
             'https://www.youtube.com/watch?v=nZhRe6FubH4',
             'https://img.youtube.com/vi/nZhRe6FubH4/maxresdefault.jpg',
             'Εμπειρία ελληνικού νησιού',
-            'Κυκλάδες, Ηλιοβασίλεμα, Αρχιτεκτονική',
+            'Κυκλάδες',
             '',
             'Verified 360° ✅'
         ),
         (
-            'Καταρράκτης 360° - Relax Sounds',
+            'Καταρράκτης 360°',
             'Χαλάρωσε δίπλα σε καταρράκτη',
             'Χαλάρωση',
             'Φύση',
@@ -336,15 +342,13 @@ def seed_data(conn: sqlite3.Connection) -> None:
             'https://www.youtube.com/watch?v=XcWrh21KrPg',
             'https://img.youtube.com/vi/XcWrh21KrPg/maxresdefault.jpg',
             'Meditation με ήχους νερού',
-            'Νερό, Ηρεμία, Φύση',
+            'Νερό, Ηρεμία',
             '',
-            'Verified 360° ✅ - 25 min relaxation'
+            'Verified 360° ✅'
         ),
-        
-        # ======== ΕΙΔΙΚΕΣ ΚΑΤΗΓΟΡΙΕΣ (2) ========
         (
-            'Διάστημα - Spacewalk ISS 360°',
-            'Περπάτησε έξω από το διαστημικό σταθμό',
+            'Spacewalk ISS 360°',
+            'Περπάτησε έξω από ISS',
             'Χαλάρωση',
             'Χόμπι',
             20,
@@ -352,13 +356,13 @@ def seed_data(conn: sqlite3.Connection) -> None:
             'https://www.youtube.com/watch?v=KaOC9danxNo',
             'https://img.youtube.com/vi/KaOC9danxNo/maxresdefault.jpg',
             'Εμπειρία μηδενικής βαρύτητας',
-            'Διάστημα, Τεχνολογία, EVA',
+            'Διάστημα',
             '',
-            'Verified 360° ✅ - Μπορεί να προκαλέσει ίλιγγο'
+            'Verified 360° ✅'
         ),
         (
-            'Δεινόσαυροι 360° - Jurassic VR',
-            'Συνάντησε Τ-Rex και Brachiosaurus',
+            'Δεινόσαυροι 360°',
+            'Συνάντησε T-Rex',
             'Εκπαιδευτικό',
             'Παλαιοντολογία',
             20,
@@ -366,24 +370,330 @@ def seed_data(conn: sqlite3.Connection) -> None:
             'https://www.youtube.com/watch?v=2HTbB7BobKM',
             'https://img.youtube.com/vi/2HTbB7BobKM/maxresdefault.jpg',
             'Γνωριμία με προϊστορική ζωή',
-            'Δεινόσαυροι, Ιουρασική, Εξέλιξη',
-            '1. Πόσο μεγάλοι ήταν;\n2. Τι έτρωγαν;\n3. Γιατί εξαφανίστηκαν;',
-            'Verified 360° ✅ - CGI animation'
+            'Δεινόσαυροι',
+            '1. Πόσο μεγάλοι ήταν;',
+            'Verified 360° ✅'
         ),
     ]
     
-    # Insert experiences
-    for exp in experiences:
-        conn.execute('''
-            INSERT INTO experiences 
-            (title, description, category, subcategory, duration_min, difficulty,
-             youtube_url, thumbnail_url, learning_goals, key_concepts,
-             discussion_questions, safety_notes)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', exp)
+    conn.executemany('''
+        INSERT INTO experiences 
+        (title, description, category, subcategory, duration_min, difficulty, 
+         youtube_url, thumbnail_url, learning_goals, key_concepts, 
+         discussion_questions, safety_notes)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', experiences)
 
 
-# Continue with rest of original file...
+def get_db() -> sqlite3.Connection:
+    """Get database connection."""
+    conn = sqlite3.connect('vr_library.db', check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+# ============================================================================
+# QR CODE GENERATION
+# ============================================================================
+
+def generate_qr_code(url: str) -> Optional[str]:
+    """Generate QR code and return base64 image."""
+    if not HAS_QR:
+        return None
+    
+    try:
+        qr = qrcode.QRCode(version=1, box_size=10, border=2)
+        qr.add_data(url)
+        qr.make(fit=True)
+        
+        img = qr.make_image(fill_color="black", back_color="white")
+        
+        buf = io.BytesIO()
+        img.save(buf, format='PNG')
+        buf.seek(0)
+        
+        img_base64 = base64.b64encode(buf.read()).decode()
+        return f"data:image/png;base64,{img_base64}"
+    except Exception:
+        return None
+
+
+# ============================================================================
+# SESSION STATE INIT
+# ============================================================================
+
+if 'session_id' not in st.session_state:
+    st.session_state.session_id = base64.b64encode(
+        datetime.now().isoformat().encode()
+    ).decode()[:16]
+
+if 'current_view' not in st.session_state:
+    st.session_state.current_view = 'library'
+
+if 'selected_exp_id' not in st.session_state:
+    st.session_state.selected_exp_id = None
+
+
+# ============================================================================
+# PAGE CONFIG
+# ============================================================================
+
+st.set_page_config(
+    page_title="VR School Library 📚",
+    page_icon="🥽",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
+
+# Custom CSS for mobile-responsive design
+st.markdown("""
+<style>
+    .main-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 2rem;
+        border-radius: 10px;
+        margin-bottom: 2rem;
+        text-align: center;
+        color: white;
+    }
+    .exp-card {
+        background: white;
+        border: 1px solid #e0e0e0;
+        border-radius: 10px;
+        padding: 1.5rem;
+        margin-bottom: 1rem;
+        transition: transform 0.2s;
+    }
+    .exp-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    .category-badge {
+        display: inline-block;
+        padding: 0.25rem 0.75rem;
+        border-radius: 15px;
+        font-size: 0.85rem;
+        font-weight: bold;
+        margin-right: 0.5rem;
+    }
+    .educational {
+        background: #e3f2fd;
+        color: #1976d2;
+    }
+    .relaxation {
+        background: #f3e5f5;
+        color: #7b1fa2;
+    }
+    .qr-container {
+        text-align: center;
+        padding: 1rem;
+        background: #f5f5f5;
+        border-radius: 10px;
+    }
+    @media (max-width: 768px) {
+        .main-header {
+            padding: 1rem;
+        }
+        .exp-card {
+            padding: 1rem;
+        }
+    }
+</style>
+""", unsafe_allow_html=True)
+
+
+# ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
+
+def get_all_experiences(
+    category: Optional[str] = None,
+    subcategory: Optional[str] = None,
+    difficulty: Optional[str] = None,
+    search: Optional[str] = None
+) -> List[Dict[str, Any]]:
+    """Get experiences with filters."""
+    conn = get_db()
+    
+    query = 'SELECT * FROM experiences WHERE 1=1'
+    params = []
+    
+    if category and category != 'Όλα':
+        query += ' AND category = ?'
+        params.append(category)
+    
+    if subcategory and subcategory != 'Όλα':
+        query += ' AND subcategory = ?'
+        params.append(subcategory)
+    
+    if difficulty and difficulty != 'Όλα':
+        query += ' AND difficulty = ?'
+        params.append(difficulty)
+    
+    if search:
+        query += ' AND (title LIKE ? OR description LIKE ? OR key_concepts LIKE ?)'
+        search_term = f'%{search}%'
+        params.extend([search_term, search_term, search_term])
+    
+    query += ' ORDER BY views_count DESC, title ASC'
+    
+    rows = conn.execute(query, params).fetchall()
+    conn.close()
+    
+    return [dict(row) for row in rows]
+
+
+def get_experience_by_id(exp_id: int) -> Optional[Dict[str, Any]]:
+    """Get single experience by ID."""
+    conn = get_db()
+    row = conn.execute('SELECT * FROM experiences WHERE id = ?', (exp_id,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def increment_views(exp_id: int) -> None:
+    """Increment view count."""
+    conn = get_db()
+    conn.execute(
+        'UPDATE experiences SET views_count = views_count + 1 WHERE id = ?',
+        (exp_id,)
+    )
+    conn.commit()
+    conn.close()
+
+
+def is_favorite(session_id: str, exp_id: int) -> bool:
+    """Check if experience is favorited."""
+    conn = get_db()
+    result = conn.execute(
+        'SELECT 1 FROM favorites WHERE session_id = ? AND experience_id = ?',
+        (session_id, exp_id)
+    ).fetchone()
+    conn.close()
+    return result is not None
+
+
+def toggle_favorite(session_id: str, exp_id: int) -> bool:
+    """Toggle favorite status. Returns new state (True = favorited)."""
+    conn = get_db()
+    
+    if is_favorite(session_id, exp_id):
+        conn.execute(
+            'DELETE FROM favorites WHERE session_id = ? AND experience_id = ?',
+            (session_id, exp_id)
+        )
+        conn.commit()
+        conn.close()
+        return False
+    else:
+        conn.execute(
+            'INSERT INTO favorites (session_id, experience_id) VALUES (?, ?)',
+            (session_id, exp_id)
+        )
+        conn.commit()
+        conn.close()
+        return True
+
+
+def get_favorites(session_id: str) -> List[Dict[str, Any]]:
+    """Get all favorites for session."""
+    conn = get_db()
+    rows = conn.execute('''
+        SELECT e.* FROM experiences e
+        JOIN favorites f ON e.id = f.experience_id
+        WHERE f.session_id = ?
+        ORDER BY f.created_at DESC
+    ''', (session_id,)).fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+
+# ============================================================================
+# UI COMPONENTS
+# ============================================================================
+
+def render_header() -> None:
+    """Render main header."""
+    st.markdown("""
+    <div class="main-header">
+        <h1>🥽 VR School Library</h1>
+        <p>Βιβλιοθήκη Εικονικής Πραγματικότητας για Μαθητές 15-18 ετών</p>
+        <p style="font-size: 0.9rem; opacity: 0.9;">
+            Χρησιμοποίησε το smartphone σου + VR headset case για μοναδικές εμπειρίες!
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+def render_navigation() -> None:
+    """Render navigation buttons."""
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        if st.button("📚 Βιβλιοθήκη", use_container_width=True):
+            st.session_state.current_view = 'library'
+            st.rerun()
+    
+    with col2:
+        if st.button("⭐ Αγαπημένα", use_container_width=True):
+            st.session_state.current_view = 'favorites'
+            st.rerun()
+    
+    with col3:
+        if st.button("ℹ️ Οδηγίες", use_container_width=True):
+            st.session_state.current_view = 'help'
+            st.rerun()
+    
+    with col4:
+        if st.button("🔧 Admin", use_container_width=True):
+            st.session_state.current_view = 'admin'
+            st.rerun()
+
+
+def render_experience_card(exp: Dict[str, Any], show_details_btn: bool = True) -> None:
+    """Render experience card."""
+    category_class = 'educational' if exp['category'] == 'Εκπαιδευτικό' else 'relaxation'
+    
+    st.markdown(f"""
+    <div class="exp-card">
+        <span class="category-badge {category_class}">{exp['category']}</span>
+        <span class="category-badge" style="background: #fff3e0; color: #e65100;">
+            {exp['subcategory']}
+        </span>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    col1, col2 = st.columns([3, 1])
+    
+    with col1:
+        st.markdown(f"### {exp['title']}")
+        st.write(exp['description'])
+        st.caption(f"⏱️ {exp['duration_min']} λεπτά | 🎯 {exp['difficulty']} | 👁️ {exp['views_count']} προβολές")
+    
+    with col2:
+        if exp['thumbnail_url']:
+            st.image(exp['thumbnail_url'], use_container_width=True)
+    
+    if show_details_btn:
+        col_btn1, col_btn2 = st.columns(2)
+        
+        with col_btn1:
+            if st.button("📖 Λεπτομέρειες", key=f"details_{exp['id']}", use_container_width=True):
+                st.session_state.selected_exp_id = exp['id']
+                st.session_state.current_view = 'experience'
+                st.rerun()
+        
+        with col_btn2:
+            is_fav = is_favorite(st.session_state.session_id, exp['id'])
+            fav_icon = "⭐" if is_fav else "☆"
+            if st.button(f"{fav_icon} Αγαπημένο", key=f"fav_{exp['id']}", use_container_width=True):
+                toggle_favorite(st.session_state.session_id, exp['id'])
+                st.rerun()
+
+
+# ============================================================================
+# PAGES
+# ============================================================================
 
 def library_page() -> None:
     """Main library page."""
