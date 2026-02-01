@@ -10,6 +10,8 @@ import sqlite3
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 import uuid
+from io import BytesIO
+import base64
 
 # Database setup
 DB_FILE = 'vr_library.db'
@@ -63,154 +65,142 @@ def init_db() -> None:
     conn.close()
 
 def seed_data(conn: sqlite3.Connection) -> None:
-    """Seed with ULTRA SAFE 360° VR videos."""
+    """Seed with verified VR headset-compatible videos."""
     experiences = [
-        # ============ TOP 10 SAFEST 360° VR VIDEOS ============
-        # Manually tested & verified working
-        # All have cardboard icon 🥽
+        # ============ VERIFIED VR HEADSET VIDEOS ============
+        # Tested: February 2026
+        # All compatible with VR headsets
         
         # ΕΚΠΑΙΔΕΥΤΙΚΑ (5)
         (
-            'Διάστημα ISS 360° 🚀',
-            'Tour στον Διεθνή Διαστημικό Σταθμό',
+            'Ηλιακό Σύστημα 360° 🌌',
+            'Ταξίδι στους πλανήτες',
             'Εκπαιδευτικό',
-            'Φυσική',
-            10,
-            'Εύκολο',
-            'https://www.youtube.com/watch?v=jAz9pRnggGo',
-            'https://img.youtube.com/vi/jAz9pRnggGo/maxresdefault.jpg',
-            'Ζωή στο διάστημα',
-            'Βαρύτητα, Διάστημα',
-            'Πώς ζουν οι αστροναύτες;',
-            '✅ Safe 360° VR'
-        ),
-        (
-            'Ωκεανός - Υποβρύχιος 360° 🐠',
-            'Κολύμπησε με ψάρια και κοράλλια',
-            'Εκπαιδευτικό',
-            'Βιολογία',
+            'Αστρονομία',
             15,
             'Εύκολο',
-            'https://www.youtube.com/watch?v=u7deClndzQw',
-            'https://img.youtube.com/vi/u7deClndzQw/maxresdefault.jpg',
-            'Θαλάσσια ζωή',
-            'Ωκεανός, Ψάρια',
-            'Τι ζώα είδες;',
-            '✅ Safe 360° VR'
+            'https://youtu.be/A6gxU4KcqeE',
+            'https://img.youtube.com/vi/A6gxU4KcqeE/maxresdefault.jpg',
+            'Πλανήτες και διάστημα',
+            'Solar System, Planets',
+            'Ποιος είναι ο μεγαλύτερος πλανήτης;',
+            '✅ VR Headset Compatible'
         ),
         (
-            'Αρχαία Ρώμη 360° 🏛️',
-            'Περπάτησε στο Κολοσσαίο',
+            'Ωκεανός 360° 🐠',
+            'Υποβρύχια εξερεύνηση',
             'Εκπαιδευτικό',
-            'Ιστορία',
+            'Βιολογία',
             12,
-            'Μέτριο',
-            'https://www.youtube.com/watch?v=OH-3Gij88ic',
-            'https://img.youtube.com/vi/OH-3Gij88ic/maxresdefault.jpg',
-            'Ρωμαϊκός πολιτισμός',
-            'Αρχαία Ρώμη',
-            'Πώς ζούσαν οι Ρωμαίοι;',
-            '✅ Safe 360° VR'
+            'Εύκολο',
+            'https://youtu.be/4m15-905_D8',
+            'https://img.youtube.com/vi/4m15-905_D8/maxresdefault.jpg',
+            'Θαλάσσια ζωή',
+            'Ocean, Marine Life',
+            'Τι θαλάσσια ζώα είδες;',
+            '✅ VR Headset Compatible'
         ),
         (
-            'Ηφαίστειο 360° 🌋',
-            'Δες ηφαιστειακή έκρηξη',
-            'Εκπαιδευτικό',
-            'Γεωλογία',
-            8,
-            'Μέτριο',
-            'https://www.youtube.com/watch?v=Y9cZh8_vJlg',
-            'https://img.youtube.com/vi/Y9cZh8_vJlg/maxresdefault.jpg',
-            'Ηφαιστειακή δραστηριότητα',
-            'Λάβα, Μάγμα',
-            'Πώς σχηματίζεται ηφαίστειο;',
-            '✅ Safe 360° VR'
-        ),
-        (
-            'Σαβάνα Αφρικής 360° 🦁',
-            'Safari με λιοντάρια',
+            'Άγρια Ζωή Δάσους 360° 🦌',
+            'Ζώα στο φυσικό τους περιβάλλον',
             'Εκπαιδευτικό',
             'Ζωολογία',
             18,
             'Εύκολο',
-            'https://www.youtube.com/watch?v=sPyAQQklc1s',
-            'https://img.youtube.com/vi/sPyAQQklc1s/maxresdefault.jpg',
-            'Άγρια ζώα Αφρικής',
-            'Safari, Λιοντάρια',
-            'Ποια ζώα ζουν στη σαβάνα;',
-            '✅ Safe 360° VR'
+            'https://youtu.be/IvmJVD61UH8',
+            'https://img.youtube.com/vi/IvmJVD61UH8/maxresdefault.jpg',
+            'Άγρια ζώα και φύση',
+            'Forest, Wildlife',
+            'Ποια ζώα ζουν στο δάσος;',
+            '✅ VR Headset Compatible'
+        ),
+        (
+            'Διάστημα - Cold Space 360° 🚀',
+            'Εξερεύνηση του διαστήματος',
+            'Εκπαιδευτικό',
+            'Φυσική',
+            14,
+            'Μέτριο',
+            'https://youtu.be/Lp_AclAXXb4',
+            'https://img.youtube.com/vi/Lp_AclAXXb4/maxresdefault.jpg',
+            'Ταξίδι στο σύμπαν',
+            'Space, Universe',
+            'Πώς είναι το διάστημα;',
+            '✅ VR Headset Compatible'
+        ),
+        (
+            'Dubai 360° 🏙️',
+            'Περιήγηση στο Dubai',
+            'Εκπαιδευτικό',
+            'Γεωγραφία',
+            16,
+            'Εύκολο',
+            'https://youtu.be/5YAJn83Lgys',
+            'https://img.youtube.com/vi/5YAJn83Lgys/maxresdefault.jpg',
+            'Μοντέρνα αρχιτεκτονική',
+            'Dubai, Architecture',
+            'Τι ιδιαίτερο έχει το Dubai;',
+            '✅ VR Headset Compatible'
         ),
         
-        # ΧΑΛΑΡΩΣΗ (5)
+        # ΠΕΡΙΠΕΤΕΙΕΣ (2)
         (
-            'Παραλία Sunset 360° 🌅',
-            'Χαλάρωσε στην παραλία',
-            'Χαλάρωση',
-            'Φύση',
-            30,
-            'Εύκολο',
-            'https://www.youtube.com/watch?v=V1bFr2SWP1I',
-            'https://img.youtube.com/vi/V1bFr2SWP1I/maxresdefault.jpg',
-            'Meditation και χαλάρωση',
-            'Θάλασσα, Ηρεμία',
-            '',
-            '✅ Safe 360° VR - 30min'
-        ),
-        (
-            'Βόρειο Σέλας 360° ✨',
-            'Aurora Borealis στη Νορβηγία',
-            'Χαλάρωση',
-            'Φύση',
-            12,
-            'Εύκολο',
-            'https://www.youtube.com/watch?v=nT7K3bRMjos',
-            'https://img.youtube.com/vi/nT7K3bRMjos/maxresdefault.jpg',
-            'Φυσικό φαινόμενο',
-            'Aurora, Φως',
-            '',
-            '✅ Safe 360° VR'
-        ),
-        (
-            'Δάσος - Περίπατος 360° 🌲',
-            'Ήρεμος περίπατος στη φύση',
-            'Χαλάρωση',
-            'Φύση',
+            'New York 360° 🗽',
+            'Εξερεύνηση της Νέας Υόρκης',
+            'Περιπέτειες',
+            'Ταξίδι',
             20,
             'Εύκολο',
-            'https://www.youtube.com/watch?v=wol40gJY18A',
-            'https://img.youtube.com/vi/wol40gJY18A/maxresdefault.jpg',
-            'Ήχοι φύσης',
-            'Δάσος, Πουλιά',
-            '',
-            '✅ Safe 360° VR'
+            'https://www.youtube.com/watch?v=xHG-I25PeE8',
+            'https://img.youtube.com/vi/xHG-I25PeE8/maxresdefault.jpg',
+            'Περιήγηση σε πόλη',
+            'New York, City Tour',
+            'Ποια αξιοθέατα είδες;',
+            '✅ VR Headset Compatible'
         ),
         (
-            'Καταρράκτης 360° 💧',
-            'Meditation με νερό',
+            'Dinosaur Roller Coaster 360° 🦖',
+            'Τρομακτική περιπέτεια με δεινόσαυρους',
+            'Περιπέτειες',
+            'Ψυχαγωγία',
+            10,
+            'Δύσκολο',
+            'https://youtu.be/N_PcMhAgsXE',
+            'https://img.youtube.com/vi/N_PcMhAgsXE/maxresdefault.jpg',
+            'Extreme VR experience',
+            'Roller Coaster, Dinosaurs',
+            '',
+            '⚠️ VR Headset - Μπορεί να προκαλέσει ζάλη'
+        ),
+        
+        # ΧΑΛΑΡΩΣΗ (2)
+        (
+            'Kayak στη Φύση 360° 🛶',
+            'Ήρεμη βόλτα με καγιάκ',
             'Χαλάρωση',
             'Φύση',
-            25,
+            15,
             'Εύκολο',
-            'https://www.youtube.com/watch?v=PJHxbRUwkIY',
-            'https://img.youtube.com/vi/PJHxbRUwkIY/maxresdefault.jpg',
-            'Χαλάρωση',
-            'Νερό, Φύση',
+            'https://youtu.be/UHbxWNabK5I',
+            'https://img.youtube.com/vi/UHbxWNabK5I/maxresdefault.jpg',
+            'Χαλαρωτική εμπειρία',
+            'Kayak, Nature',
             '',
-            '✅ Safe 360° VR'
+            '✅ VR Headset Compatible'
         ),
         (
-            'Βουνά - Everest 360° 🏔️',
-            'Κορυφή του κόσμου',
+            'Relax Tour Nature 360° 🌿',
+            'Περίπατος στη φύση',
             'Χαλάρωση',
-            'Περιπέτειες',
-            15,
-            'Δύσκολο',
-            'https://www.youtube.com/watch?v=cJOZp2ZftCw',
-            'https://img.youtube.com/vi/cJOZp2ZftCw/maxresdefault.jpg',
-            'Extreme adventure',
-            'Ορειβασία',
+            'Φύση',
+            18,
+            'Εύκολο',
+            'https://youtu.be/r3RpfOMwQyM',
+            'https://img.youtube.com/vi/r3RpfOMwQyM/maxresdefault.jpg',
+            'Meditation και χαλάρωση',
+            'Nature, Relaxation',
             '',
-            '✅ Safe 360° VR - Ύψη'
+            '✅ VR Headset Compatible'
         ),
     ]
     
@@ -321,6 +311,10 @@ st.markdown("""
         background: #f3e5f5;
         color: #7b1fa2;
     }
+    .adventure {
+        background: #fff3e0;
+        color: #e65100;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -329,7 +323,7 @@ st.markdown("""
 <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
             padding: 2rem; border-radius: 10px; text-align: center; color: white; margin-bottom: 2rem;">
     <h1>🥽 VR School Library</h1>
-    <p style="font-size: 1.2rem;">10 Verified 360° VR Experiences</p>
+    <p style="font-size: 1.2rem;">9 Verified VR Headset Videos</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -364,7 +358,7 @@ def library_page():
     st.markdown("## 📚 Διαθέσιμες Εμπειρίες")
     
     # Filters
-    category = st.selectbox("Κατηγορία:", ["Όλες", "Εκπαιδευτικό", "Χαλάρωση"])
+    category = st.selectbox("Κατηγορία:", ["Όλες", "Εκπαιδευτικό", "Περιπέτειες", "Χαλάρωση"])
     
     # Get experiences
     cat_filter = None if category == "Όλες" else category
@@ -379,7 +373,12 @@ def library_page():
     
     # Display experiences
     for exp in experiences:
-        cat_class = 'educational' if exp['category'] == 'Εκπαιδευτικό' else 'relaxation'
+        if exp['category'] == 'Εκπαιδευτικό':
+            cat_class = 'educational'
+        elif exp['category'] == 'Χαλάρωση':
+            cat_class = 'relaxation'
+        else:
+            cat_class = 'adventure'
         
         st.markdown(f"""
         <span class="category-badge {cat_class}">{exp['category']}</span>
@@ -428,7 +427,12 @@ def experience_page():
     st.markdown("---")
     
     # Title
-    cat_class = 'educational' if exp['category'] == 'Εκπαιδευτικό' else 'relaxation'
+    if exp['category'] == 'Εκπαιδευτικό':
+        cat_class = 'educational'
+    elif exp['category'] == 'Χαλάρωση':
+        cat_class = 'relaxation'
+    else:
+        cat_class = 'adventure'
     st.markdown(f"""
     <span class="category-badge {cat_class}">{exp['category']}</span>
     <span class="category-badge" style="background: #fff3e0; color: #e65100;">
@@ -508,7 +512,7 @@ def admin_page():
     col1.metric("Εμπειρίες", total)
     col2.metric("Συνολικές Προβολές", total_views)
     
-    st.info("✅ Όλα τα 10 videos είναι verified 360° VR!")
+    st.info("✅ Όλα τα 9 videos είναι verified VR headset compatible!")
 
 # Router
 def main():
