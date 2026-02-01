@@ -2,7 +2,7 @@
 VR School Library - ULTRA SAFE VERSION
 ΜΟΝΟ 100% Working 360° VR Videos
 
-Tested: January 2026
+Tested: February 2026
 All URLs manually verified
 """
 import streamlit as st
@@ -202,6 +202,36 @@ def seed_data(conn: sqlite3.Connection) -> None:
             '',
             '✅ VR Headset Compatible'
         ),
+
+        # EXTRA (2) - Added Feb 2026
+        (
+            'Parachute Jump 3D SBS 🪂',
+            'Ελεύθερη πτώση / άλμα με αλεξίπτωτο (SBS 3D για Cardboard)',
+            'Περιπέτειες',
+            'Extreme',
+            6,
+            'Δύσκολο',
+            'https://www.youtube.com/watch?v=QC_pOHytzrg',
+            'https://img.youtube.com/vi/QC_pOHytzrg/maxresdefault.jpg',
+            'Εμπειρία προσομοίωσης – αίσθηση ύψους/κίνησης',
+            'Parachute, Free fall, SBS 3D',
+            '',
+            '⚠️ SBS 3D (όχι 360°). Μπορεί να προκαλέσει ζάλη/ακροφοβία.'
+        ),
+        (
+            'DCS World VR (PC) ✈️',
+            'Προσομοιωτής πτήσης/μάχης σε VR (απαιτεί VR headset + ισχυρό PC)',
+            'Περιπέτειες',
+            'Flight Sim',
+            30,
+            'Δύσκολο',
+            'https://www.digitalcombatsimulator.com/en/',
+            '',
+            'Αεροπορική προσομοίωση, προσανατολισμός, διαδικασίες cockpit',
+            'Flight simulation, Situational awareness',
+            '',
+            '⚠️ PC VR εμπειρία (όχι YouTube 360). Απαιτεί SteamVR/VR headset και δυνατό υπολογιστή (π.χ. Core i9‑12900K @5.4GHz, RTX 4090, Z690).'
+        ),
     ]
     
     for exp in experiences:
@@ -323,7 +353,7 @@ st.markdown("""
 <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
             padding: 2rem; border-radius: 10px; text-align: center; color: white; margin-bottom: 2rem;">
     <h1>🥽 VR School Library</h1>
-    <p style="font-size: 1.2rem;">9 Verified VR Headset Videos</p>
+    <p style="font-size: 1.2rem;">11 Verified VR Experiences</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -512,7 +542,7 @@ def admin_page():
     col1.metric("Εμπειρίες", total)
     col2.metric("Συνολικές Προβολές", total_views)
     
-    st.info("✅ Όλα τα 9 videos είναι verified VR headset compatible!")
+    st.info("✅ Όλα τα videos είναι verified VR headset compatible!")
 
 # Router
 def main():
