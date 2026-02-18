@@ -2,7 +2,7 @@
 VR School Library - ULTRA SAFE VERSION
 ΜΟΝΟ 100% Working 360° VR Videos
 
-Tested: February 2026
+Tested: January 2026
 All URLs manually verified
 """
 import streamlit as st
@@ -202,36 +202,6 @@ def seed_data(conn: sqlite3.Connection) -> None:
             '',
             '✅ VR Headset Compatible'
         ),
-
-        # EXTRA (2) - Added Feb 2026
-        (
-            'Parachute Jump 3D SBS 🪂',
-            'Ελεύθερη πτώση / άλμα με αλεξίπτωτο (SBS 3D για Cardboard)',
-            'Περιπέτειες',
-            'Extreme',
-            6,
-            'Δύσκολο',
-            'https://www.youtube.com/watch?v=QC_pOHytzrg',
-            'https://img.youtube.com/vi/QC_pOHytzrg/maxresdefault.jpg',
-            'Εμπειρία προσομοίωσης – αίσθηση ύψους/κίνησης',
-            'Parachute, Free fall, SBS 3D',
-            '',
-            '⚠️ SBS 3D (όχι 360°). Μπορεί να προκαλέσει ζάλη/ακροφοβία.'
-        ),
-        (
-            'DCS World VR (PC) ✈️',
-            'Προσομοιωτής πτήσης/μάχης σε VR (απαιτεί VR headset + ισχυρό PC)',
-            'Περιπέτειες',
-            'Flight Sim',
-            30,
-            'Δύσκολο',
-            'https://www.digitalcombatsimulator.com/en/',
-            '',
-            'Αεροπορική προσομοίωση, προσανατολισμός, διαδικασίες cockpit',
-            'Flight simulation, Situational awareness',
-            '',
-            '⚠️ PC VR εμπειρία (όχι YouTube 360). Απαιτεί SteamVR/VR headset και δυνατό υπολογιστή (π.χ. Core i9‑12900K @5.4GHz, RTX 4090, Z690).'
-        ),
     ]
     
     for exp in experiences:
@@ -353,12 +323,12 @@ st.markdown("""
 <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
             padding: 2rem; border-radius: 10px; text-align: center; color: white; margin-bottom: 2rem;">
     <h1>🥽 VR School Library</h1>
-    <p style="font-size: 1.2rem;">11 Verified VR Experiences</p>
+    <p style="font-size: 1.2rem;">9 Verified VR Headset Videos</p>
 </div>
 """, unsafe_allow_html=True)
 
 # Navigation
-col1, col2, col3 = st.columns(3)
+col1, col2, col3, col4 = st.columns(4)
 with col1:
     if st.button("📚 Βιβλιοθήκη", use_container_width=True):
         st.session_state.current_view = 'library'
@@ -368,6 +338,10 @@ with col2:
         st.session_state.current_view = 'help'
         st.rerun()
 with col3:
+    if st.button("📲 Κατέβασε App", use_container_width=True):
+        st.session_state.current_view = 'download'
+        st.rerun()
+with col4:
     if st.button("🔧 Admin", use_container_width=True):
         st.session_state.current_view = 'admin'
         st.rerun()
@@ -508,6 +482,104 @@ def experience_page():
         st.code(exp['youtube_url'])
         st.markdown(f"[Άνοιγμα σε YouTube]({exp['youtube_url']})")
 
+def download_page():
+    """Download ExpeditionsPro app page - με σωστά links από Δρ Ρουσιά."""
+    st.markdown("## 📲 Κατέβασε το ExpeditionsPro VR Tours")
+
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #1565C0 0%, #2e7d32 100%);
+                padding: 1.5rem; border-radius: 12px; text-align: center;
+                color: white; margin-bottom: 1.5rem;">
+        <h3 style="margin:0 0 0.3rem 0;">🥽 Expeditions Pro VR Tours</h3>
+        <p style="margin:0; opacity:0.9; font-size:0.95rem;">
+            Virtual Reality Tour Maker · Εκπαίδευση · Μάθηση · Ψυχαγωγία
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("""
+        <div style="background:#0d1b2a; border-radius:12px; padding:1.5rem;
+                    text-align:center; border:2px solid #4CAF50; min-height:200px;">
+            <div style="font-size:2.5rem;">🤖</div>
+            <h4 style="color:white; margin:0.5rem 0;">Android</h4>
+            <p style="color:#aaa; font-size:0.78rem; margin-bottom:1rem;">μέσω APKPure (δωρεάν)</p>
+            <a href="https://bit.ly/ExpeditionsProVRTours" target="_blank"
+               style="display:block; background:#4CAF50; color:white;
+                      padding:0.7rem 0.5rem; border-radius:8px;
+                      text-decoration:none; font-weight:bold; font-size:0.85rem;
+                      margin-bottom:0.5rem;">
+                ⬇️ bit.ly/ExpeditionsProVRTours
+            </a>
+            <small style="color:#888; font-size:0.7rem;">
+                Απευθείας σύνδεσμος από<br>Δρ Χρίστο Ρουσιά · ΠΙ Κύπρου
+            </small>
+        </div>
+        """, unsafe_allow_html=True)
+        # QR για Android
+        qr_android = generate_qr_code("https://bit.ly/ExpeditionsProVRTours")
+        if qr_android:
+            st.markdown(f'<div style="text-align:center; margin-top:0.8rem;"><img src="{qr_android}" style="width:160px; border-radius:8px;"><br><small>📱 Σάρωσε για Android</small></div>', unsafe_allow_html=True)
+
+    with col2:
+        st.markdown("""
+        <div style="background:#0d1b2a; border-radius:12px; padding:1.5rem;
+                    text-align:center; border:2px solid #888; min-height:200px;">
+            <div style="font-size:2.5rem;">🍎</div>
+            <h4 style="color:white; margin:0.5rem 0;">iPhone / iPad</h4>
+            <p style="color:#aaa; font-size:0.78rem; margin-bottom:1rem;">App Store</p>
+            <a href="https://apps.apple.com/app/expeditions-pro/id1477024975" target="_blank"
+               style="display:block; background:#555; color:white;
+                      padding:0.7rem 0.5rem; border-radius:8px;
+                      text-decoration:none; font-weight:bold; font-size:0.85rem;
+                      margin-bottom:0.5rem;">
+                🍎 Available on the App Store
+            </a>
+            <small style="color:#888; font-size:0.7rem;">
+                Αναζήτησε: "ExpeditionsPro"
+            </small>
+        </div>
+        """, unsafe_allow_html=True)
+        # QR για iOS
+        qr_ios = generate_qr_code("https://apps.apple.com/app/expeditions-pro/id1477024975")
+        if qr_ios:
+            st.markdown(f'<div style="text-align:center; margin-top:0.8rem;"><img src="{qr_ios}" style="width:160px; border-radius:8px;"><br><small>📱 Σάρωσε για iPhone</small></div>', unsafe_allow_html=True)
+
+    st.markdown("---")
+
+    st.markdown("### 🌐 Χρήση από Browser — χωρίς εγκατάσταση")
+    st.markdown("""
+    <div style="background:#e8f5e9; border-left:4px solid #2e7d32;
+                padding:1rem 1.2rem; border-radius:8px;">
+        <strong>🔗 tours.expeditionspro.com</strong><br>
+        <span style="font-size:0.9rem; color:#333;">
+        Άνοιξε τον σύνδεσμο από οποιοδήποτε browser, δημιούργησε δωρεάν λογαριασμό
+        και δες εκατοντάδες VR tours — χωρίς εγκατάσταση!
+        </span>
+    </div>
+    """, unsafe_allow_html=True)
+    st.markdown("[🔗 Άνοιγμα tours.expeditionspro.com](https://tours.expeditionspro.com)")
+
+    st.markdown("---")
+    st.markdown("### 📋 Οδηγίες εγκατάστασης Android (APK)")
+    st.markdown("""
+**Βήμα 1 →** Άνοιξε: **[bit.ly/ExpeditionsProVRTours](https://bit.ly/ExpeditionsProVRTours)**
+
+**Βήμα 2 →** Κατέβασε το APK αρχείο μέσω APKPure
+
+**Βήμα 3 →** Ρυθμίσεις → Ασφάλεια → **"Εγκατάσταση από άγνωστες πηγές"** ✅
+
+**Βήμα 4 →** Άνοιξε το APK αρχείο → **Εγκατάσταση**
+
+**Βήμα 5 →** Δημιούργησε λογαριασμό → επίλεξε Tour → φόρεσε VR headset! 🥽
+    """)
+
+    st.info("🏫 **Λειτουργία Τάξης (Class Mode):** Ο καθηγητής επιλέγει **Lead** και οι μαθητές **Follow → Join**. Όλοι πρέπει να είναι στο **ίδιο WiFi**.")
+    st.warning("⚠️ Το ExpeditionsPro δεν είναι διαθέσιμο στο Google Play — χρησιμοποίησε τον σύνδεσμο APKPure.")
+
+
 def help_page():
     """Help page."""
     st.markdown("## ℹ️ Οδηγίες Χρήσης")
@@ -542,7 +614,7 @@ def admin_page():
     col1.metric("Εμπειρίες", total)
     col2.metric("Συνολικές Προβολές", total_views)
     
-    st.info("✅ Όλα τα videos είναι verified VR headset compatible!")
+    st.info("✅ Όλα τα 9 videos είναι verified VR headset compatible!")
 
 # Router
 def main():
@@ -555,6 +627,8 @@ def main():
         experience_page()
     elif st.session_state.current_view == 'help':
         help_page()
+    elif st.session_state.current_view == 'download':
+        download_page()
     elif st.session_state.current_view == 'admin':
         admin_page()
     else:
