@@ -482,104 +482,6 @@ def experience_page():
         st.code(exp['youtube_url'])
         st.markdown(f"[Άνοιγμα σε YouTube]({exp['youtube_url']})")
 
-def download_page():
-    """Download ExpeditionsPro app page - με σωστά links από Δρ Ρουσιά."""
-    st.markdown("## 📲 Κατέβασε το ExpeditionsPro VR Tours")
-
-    st.markdown("""
-    <div style="background: linear-gradient(135deg, #1565C0 0%, #2e7d32 100%);
-                padding: 1.5rem; border-radius: 12px; text-align: center;
-                color: white; margin-bottom: 1.5rem;">
-        <h3 style="margin:0 0 0.3rem 0;">🥽 Expeditions Pro VR Tours</h3>
-        <p style="margin:0; opacity:0.9; font-size:0.95rem;">
-            Virtual Reality Tour Maker · Εκπαίδευση · Μάθηση · Ψυχαγωγία
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.markdown("""
-        <div style="background:#0d1b2a; border-radius:12px; padding:1.5rem;
-                    text-align:center; border:2px solid #4CAF50; min-height:200px;">
-            <div style="font-size:2.5rem;">🤖</div>
-            <h4 style="color:white; margin:0.5rem 0;">Android</h4>
-            <p style="color:#aaa; font-size:0.78rem; margin-bottom:1rem;">μέσω APKPure (δωρεάν)</p>
-            <a href="https://bit.ly/ExpeditionsProVRTours" target="_blank"
-               style="display:block; background:#4CAF50; color:white;
-                      padding:0.7rem 0.5rem; border-radius:8px;
-                      text-decoration:none; font-weight:bold; font-size:0.85rem;
-                      margin-bottom:0.5rem;">
-                ⬇️ bit.ly/ExpeditionsProVRTours
-            </a>
-            <small style="color:#888; font-size:0.7rem;">
-                Απευθείας σύνδεσμος από<br>Δρ Χρίστο Ρουσιά · ΠΙ Κύπρου
-            </small>
-        </div>
-        """, unsafe_allow_html=True)
-        # QR για Android
-        qr_android = generate_qr_code("https://bit.ly/ExpeditionsProVRTours")
-        if qr_android:
-            st.markdown(f'<div style="text-align:center; margin-top:0.8rem;"><img src="{qr_android}" style="width:160px; border-radius:8px;"><br><small>📱 Σάρωσε για Android</small></div>', unsafe_allow_html=True)
-
-    with col2:
-        st.markdown("""
-        <div style="background:#0d1b2a; border-radius:12px; padding:1.5rem;
-                    text-align:center; border:2px solid #888; min-height:200px;">
-            <div style="font-size:2.5rem;">🍎</div>
-            <h4 style="color:white; margin:0.5rem 0;">iPhone / iPad</h4>
-            <p style="color:#aaa; font-size:0.78rem; margin-bottom:1rem;">App Store</p>
-            <a href="https://apps.apple.com/app/expeditions-pro/id1477024975" target="_blank"
-               style="display:block; background:#555; color:white;
-                      padding:0.7rem 0.5rem; border-radius:8px;
-                      text-decoration:none; font-weight:bold; font-size:0.85rem;
-                      margin-bottom:0.5rem;">
-                🍎 Available on the App Store
-            </a>
-            <small style="color:#888; font-size:0.7rem;">
-                Αναζήτησε: "ExpeditionsPro"
-            </small>
-        </div>
-        """, unsafe_allow_html=True)
-        # QR για iOS
-        qr_ios = generate_qr_code("https://apps.apple.com/app/expeditions-pro/id1477024975")
-        if qr_ios:
-            st.markdown(f'<div style="text-align:center; margin-top:0.8rem;"><img src="{qr_ios}" style="width:160px; border-radius:8px;"><br><small>📱 Σάρωσε για iPhone</small></div>', unsafe_allow_html=True)
-
-    st.markdown("---")
-
-    st.markdown("### 🌐 Χρήση από Browser — χωρίς εγκατάσταση")
-    st.markdown("""
-    <div style="background:#e8f5e9; border-left:4px solid #2e7d32;
-                padding:1rem 1.2rem; border-radius:8px;">
-        <strong>🔗 tours.expeditionspro.com</strong><br>
-        <span style="font-size:0.9rem; color:#333;">
-        Άνοιξε τον σύνδεσμο από οποιοδήποτε browser, δημιούργησε δωρεάν λογαριασμό
-        και δες εκατοντάδες VR tours — χωρίς εγκατάσταση!
-        </span>
-    </div>
-    """, unsafe_allow_html=True)
-    st.markdown("[🔗 Άνοιγμα tours.expeditionspro.com](https://tours.expeditionspro.com)")
-
-    st.markdown("---")
-    st.markdown("### 📋 Οδηγίες εγκατάστασης Android (APK)")
-    st.markdown("""
-**Βήμα 1 →** Άνοιξε: **[bit.ly/ExpeditionsProVRTours](https://bit.ly/ExpeditionsProVRTours)**
-
-**Βήμα 2 →** Κατέβασε το APK αρχείο μέσω APKPure
-
-**Βήμα 3 →** Ρυθμίσεις → Ασφάλεια → **"Εγκατάσταση από άγνωστες πηγές"** ✅
-
-**Βήμα 4 →** Άνοιξε το APK αρχείο → **Εγκατάσταση**
-
-**Βήμα 5 →** Δημιούργησε λογαριασμό → επίλεξε Tour → φόρεσε VR headset! 🥽
-    """)
-
-    st.info("🏫 **Λειτουργία Τάξης (Class Mode):** Ο καθηγητής επιλέγει **Lead** και οι μαθητές **Follow → Join**. Όλοι πρέπει να είναι στο **ίδιο WiFi**.")
-    st.warning("⚠️ Το ExpeditionsPro δεν είναι διαθέσιμο στο Google Play — χρησιμοποίησε τον σύνδεσμο APKPure.")
-
-
 def help_page():
     """Help page."""
     st.markdown("## ℹ️ Οδηγίες Χρήσης")
@@ -600,6 +502,71 @@ def help_page():
     - Σταμάτα αν νιώσεις ζάλη
     - Μην χρησιμοποιείς αν έχεις ακροφοβία
     """)
+
+def download_page():
+    """Download App page - ExpeditionsPro VR Tours."""
+    # App header banner
+    st.markdown("""
+    <div style="
+        background: linear-gradient(135deg, #1a6fa8 0%, #2e9e6b 100%);
+        padding: 2.5rem 2rem;
+        border-radius: 12px;
+        text-align: center;
+        color: white;
+        margin-bottom: 1.5rem;
+    ">
+        <h2 style="margin:0 0 0.5rem 0;">🥽 Expeditions Pro VR Tours</h2>
+        <p style="margin:0; opacity:0.9; font-size:1rem;">
+            Virtual Reality Tour Maker · Εκπαίδευση · Μάθηση · Ψυχαγωγία
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("### 📲 Κατέβασε το ExpeditionsPro VR Tours")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("""
+        <a href="https://play.google.com/store/apps/details?id=com.expeditions.pro" target="_blank"
+           style="display:block; background:#1a73e8; color:white; text-align:center;
+                  padding:0.9rem 1.5rem; border-radius:8px; text-decoration:none;
+                  font-weight:600; font-size:1rem;">
+            📱 Google Play (Android)
+        </a>
+        """, unsafe_allow_html=True)
+    with col2:
+        st.markdown("""
+        <a href="https://apps.apple.com/app/expeditions-pro/id1234567890" target="_blank"
+           style="display:block; background:#000000; color:white; text-align:center;
+                  padding:0.9rem 1.5rem; border-radius:8px; text-decoration:none;
+                  font-weight:600; font-size:1rem;">
+            🍎 App Store (iPhone/iPad)
+        </a>
+        """, unsafe_allow_html=True)
+
+    st.markdown("---")
+    st.markdown("### 🗂️ Διαθέσιμες Κατηγορίες Περιεχομένου")
+
+    categories = [
+        "Animals & Pets", "Architecture", "Art", "Culture & Humanity",
+        "Current Events", "Education", "Food & Drink", "Furniture & Home",
+        "History", "Nature", "Objects", "People & Characters",
+        "Places & Scenes", "Science", "Sports & Fitness",
+        "Tools & Technology", "Transport", "Travel & Leisure", "Uncategorized"
+    ]
+
+    # Display in 3 columns
+    cols = st.columns(3)
+    for i, cat in enumerate(categories):
+        with cols[i % 3]:
+            st.markdown(f"- {cat}")
+
+    st.markdown("---")
+    st.info(
+        "💡 **Βήματα:** 1) Κατέβασε ExpeditionsPro  →  2) Σάρωσε QR code από τη βιβλιοθήκη  "
+        "→  3) Φόρεσε το VR headset  →  4) Απόλαυσε!"
+    )
+
 
 def admin_page():
     """Admin panel."""
@@ -625,10 +592,10 @@ def main():
         library_page()
     elif st.session_state.current_view == 'experience':
         experience_page()
-    elif st.session_state.current_view == 'help':
-        help_page()
     elif st.session_state.current_view == 'download':
         download_page()
+    elif st.session_state.current_view == 'help':
+        help_page()
     elif st.session_state.current_view == 'admin':
         admin_page()
     else:
