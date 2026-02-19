@@ -563,7 +563,7 @@ def download_page():
 
     st.markdown("---")
     st.info(
-        "💡 **Βήματα:** 1) Κατέβασε ExpeditionsPro  →  2) Σάρωσε QR code από τη βιβλιοθήκη  "
+        "💡 **Βήματα:** 1) Κατέβασε ExpeditionsPro στο smartphone  →  2) Κάνε log in  "
         "→  3) Φόρεσε το VR headset  →  4) Απόλαυσε!"
     )
 
