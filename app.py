@@ -527,7 +527,7 @@ def download_page():
     col1, col2 = st.columns(2)
     with col1:
         st.markdown("""
-        <a href="https://play.google.com/store/apps/details?id=com.expeditions.pro" target="_blank"
+        <a href="https://play.google.com/store/apps/details?id=technology.singleton.expeditionspro" target="_blank"
            style="display:block; background:#1a73e8; color:white; text-align:center;
                   padding:0.9rem 1.5rem; border-radius:8px; text-decoration:none;
                   font-weight:600; font-size:1rem;">
@@ -536,13 +536,33 @@ def download_page():
         """, unsafe_allow_html=True)
     with col2:
         st.markdown("""
-        <a href="https://apps.apple.com/app/expeditions-pro/id1234567890" target="_blank"
+        <a href="https://apps.apple.com/us/app/expeditions-pro/id1589048429" target="_blank"
            style="display:block; background:#000000; color:white; text-align:center;
                   padding:0.9rem 1.5rem; border-radius:8px; text-decoration:none;
                   font-weight:600; font-size:1rem;">
             🍎 App Store (iPhone/iPad)
         </a>
         """, unsafe_allow_html=True)
+
+    st.markdown("---")
+    st.markdown("### 📷 QR Codes — Σάρωσε για άμεσο Download")
+    qr_col1, qr_col2 = st.columns(2)
+    android_url = "https://play.google.com/store/apps/details?id=technology.singleton.expeditionspro"
+    ios_url = "https://apps.apple.com/us/app/expeditions-pro/id1589048429"
+    with qr_col1:
+        st.markdown("**📱 Android (Google Play)**")
+        qr_android = generate_qr_code(android_url)
+        if qr_android:
+            st.markdown(f'<img src="{qr_android}" style="width:200px;">', unsafe_allow_html=True)
+        else:
+            st.caption(android_url)
+    with qr_col2:
+        st.markdown("**🍎 iOS (App Store)**")
+        qr_ios = generate_qr_code(ios_url)
+        if qr_ios:
+            st.markdown(f'<img src="{qr_ios}" style="width:200px;">', unsafe_allow_html=True)
+        else:
+            st.caption(ios_url)
 
     st.markdown("---")
     st.markdown("### 🗂️ Διαθέσιμες Κατηγορίες Περιεχομένου")
