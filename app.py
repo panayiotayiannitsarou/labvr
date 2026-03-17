@@ -544,11 +544,7 @@ def download_page():
         </a>
         """, unsafe_allow_html=True)
 
-    st.warning("""
-    ⚠️ **iPhone στην Κύπρο:** Αν εμφανιστεί "App Not Available", άλλαξε προσωρινά το region:  
-    **Settings → [Όνομά σου] → Media & Purchases → View Account → Country/Region → United Kingdom**  
-    Μετά το download επέστρεψε σε Cyprus.
-    """)
+
 
     st.markdown("---")
     st.markdown("### 🗂️ Διαθέσιμες Κατηγορίες Περιεχομένου")
